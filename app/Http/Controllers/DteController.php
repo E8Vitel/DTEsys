@@ -23,33 +23,53 @@ class DteController extends Controller
 {
     use AuthorizesRequests; // ← agrégalo aquí, es obligatorio
 
-    public function index()
+    public function index(Request $request)
     {
-        $dtes = DocumentoDte::with(['tipoDte', 'user', 'firma', 'historial.user'])
-            ->where('user_id', Auth::id())
-            ->orderBy('created_at', 'desc')
-            ->get();
-
-        // Estadísticas para dashboard
-        $stats = [
-            'total_dtes' => DocumentoDte::count(),
-            'monto_total' => DocumentoDte::sum('monto_total'),
-            'firmados' => DocumentoDte::whereHas('firma')->count(),
-            'usuarios' => \App\Models\User::count(),
+        $filters = [
+            'search' => $request->string('search')->toString(),
+            'tipo' => $request->string('tipo')->toString(),
+            'estado' => $request->string('estado')->toString(),
         ];
 
-        $ultimosDtes = DocumentoDte::with('tipoDte')
+        $query = DocumentoDte::with([
+            'tipoDte',
+            'historial' => function ($historial) {
+                $historial->orderBy('created_at');
+            },
+        ])->where('user_id', Auth::id());
+
+        if (!empty($filters['search'])) {
+            $query->where(function ($searchQuery) use ($filters) {
+                $searchQuery
+                    ->where('folio', 'like', '%' . $filters['search'] . '%')
+                    ->orWhere('razon_social_receptor', 'like', '%' . $filters['search'] . '%')
+                    ->orWhere('rut_receptor', 'like', '%' . $filters['search'] . '%');
+            });
+        }
+
+        if (!empty($filters['tipo'])) {
+            $query->where('tipo_dte_id', $filters['tipo']);
+        }
+
+        $dtes = $query
             ->orderBy('created_at', 'desc')
-            ->take(5)
             ->get()
             ->map(function ($dte) {
                 $dte->estado_actual = $dte->historial->last()?->estado_nuevo ?? 'Borrador';
                 return $dte;
             });
 
-        return Inertia::render('Dashboard', [
-            'stats' => $stats,
-            'ultimosDtes' => $ultimosDtes,
+        if (!empty($filters['estado'])) {
+            $dtes = $dtes
+                ->filter(fn ($dte) => $dte->estado_actual === $filters['estado'])
+                ->values();
+        }
+
+        return Inertia::render('Dtes/Index', [
+            'dtes' => $dtes,
+            'tipos' => TipoDte::query()->orderBy('nombre')->get(['id', 'nombre']),
+            'estados' => ['Borrador', 'Firmada', 'Enviada', 'Anulada'],
+            'filters' => $filters,
         ]);
     }
 
