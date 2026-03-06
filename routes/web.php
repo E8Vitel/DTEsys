@@ -28,22 +28,24 @@ Route::middleware('auth')->group(function () {
     // Usuarios con permisos para ver DTEs
     Route::middleware('can:ver-dtes')->group(function () {
         Route::get('/dtes', [DteController::class, 'index'])->name('dtes.index');
-        Route::get('/dtes/{id}', [DteController::class, 'show'])->name('dtes.show');
+        Route::get('/dtes/{dte}', [DteController::class, 'show'])->name('dtes.show');
+        Route::get('/dtes/{dte}/download-pdf', [DteController::class, 'descargarPdf'])->name('dtes.download-pdf');
+        Route::get('/dtes/{dte}/download-xml', [DteController::class, 'descargarXml'])->name('dtes.download-xml');
     });
 
     // Usuarios con permisos para firmar DTEs
     Route::middleware('can:firmar-dte')->group(function () {
-        Route::post('/dtes/{id}/firmar', [DteController::class, 'firmar'])->name('dtes.firmar');
+        Route::post('/dtes/{dte}/firmar', [DteController::class, 'firmar'])->name('dtes.firmar');
     });
 
     // Usuarios con permisos para enviar DTEs
     Route::middleware('can:enviar-dte')->group(function () {
-        Route::post('/dtes/{id}/enviar', [DteController::class, 'enviar'])->name('dtes.enviar');
+        Route::post('/dtes/{dte}/enviar', [DteController::class, 'enviar'])->name('dtes.enviar');
     });
 
     // Usuarios con permisos para anular DTEs
     Route::middleware('can:anular-dte')->group(function () {
-        Route::post('/dtes/{id}/anular', [DteController::class, 'anular'])->name('dtes.anular');
+        Route::post('/dtes/{dte}/anular', [DteController::class, 'anular'])->name('dtes.anular');
     });
 
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
@@ -64,3 +66,5 @@ Route::middleware(['auth', 'role:admin'])->group(function () {
 
 
 require __DIR__.'/auth.php';
+
+

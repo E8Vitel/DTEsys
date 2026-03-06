@@ -1,48 +1,93 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Head, router, useForm } from '@inertiajs/react';
+import { Head, router } from '@inertiajs/react';
 import SignatureCanvas from 'react-signature-canvas';
-import { Mail, Ban } from 'lucide-react';
+import { Mail, Ban, Download } from 'lucide-react';
 
 export default function Show({ dte, tipoDte, detallesDte }) {
     const [firmaTipo, setFirmaTipo] = useState('texto');
     const [firmaTexto, setFirmaTexto] = useState('');
     const sigCanvas = React.useRef(null);
-
-    const { setData: setForm, post: postFirma, processing: procFirma } = useForm({
-        tipo_firma: 'texto',
-        firma_texto: '',
-        firma_canvas: '',
-    });
+    const [procFirma, setProcFirma] = useState(false);
 
     const cambiarFirmaTipo = (tipo) => {
         setFirmaTipo(tipo);
-        setForm('tipo_firma', tipo);
+    };
+
+    const generarFirmaTextoPng = (texto) => {
+        const contenido = (texto || '').trim();
+        if (!contenido) {
+            return '';
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = 700;
+        canvas.height = 220;
+        const ctx = canvas.getContext('2d');
+
+        if (!ctx) {
+            return '';
+        }
+
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#111827';
+        ctx.font = '48px cursive';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(contenido, canvas.width / 2, canvas.height / 2);
+
+        return canvas.toDataURL('image/png');
     };
 
     const firmar = (e) => {
         e.preventDefault();
 
+        const payload = {
+            tipo_firma: firmaTipo,
+            firma_texto: firmaTipo === 'texto' ? firmaTexto : '',
+            firma_canvas: '',
+        };
+
         if (firmaTipo === 'canvas') {
-            const dataUrl = sigCanvas.current.getTrimmedCanvas().toDataURL('image/png');
-            setForm('firma_canvas', dataUrl);
+            if (!sigCanvas.current || sigCanvas.current.isEmpty()) {
+                alert('Debes dibujar la firma en el canvas.');
+                return;
+            }
+
+            payload.firma_canvas = sigCanvas.current.toDataURL('image/png');
         } else {
-            setForm('firma_texto', firmaTexto);
+            if (!firmaTexto.trim()) {
+                alert('Debes ingresar la firma en texto.');
+                return;
+            }
+
+            payload.firma_canvas = generarFirmaTextoPng(firmaTexto);
         }
 
-        postFirma(route('dtes.firmar', dte.id), {
-            onSuccess: () => alert('Firmado exitosamente'),
+        setProcFirma(true);
+
+        router.post(route('dtes.firmar', dte.id), payload, {
+            onSuccess: () => {
+                setFirmaTexto('');
+                setFirmaTipo('texto');
+                if (sigCanvas.current) {
+                    sigCanvas.current.clear();
+                }
+                alert('Firmado exitosamente');
+            },
+            onFinish: () => setProcFirma(false),
         });
     };
 
     const enviar = () => {
-        if (confirm('Enviar simulado por correo?')) {
+        if (confirm('¿Enviar simulado por correo?')) {
             router.post(route('dtes.enviar', dte.id));
         }
     };
 
     const anular = () => {
-        const comentario = prompt('Comentario para anulacion:');
+        const comentario = prompt('Comentario para anulación:');
         if (comentario) {
             router.post(route('dtes.anular', dte.id), { comentario });
         }
@@ -61,12 +106,12 @@ export default function Show({ dte, tipoDte, detallesDte }) {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div>
                                 <p><strong>Tipo:</strong> {tipoDte?.nombre} - ({tipoDte?.codigo})</p>
-                                <p><strong>Fecha Emision:</strong> {new Date(dte.fecha_emision).toLocaleDateString()}</p>
+                                <p><strong>Fecha Emisión:</strong> {new Date(dte.fecha_emision).toLocaleDateString()}</p>
                                 <p><strong>Emisor:</strong> {dte.razon_social_emisor} ({dte.rut_emisor})</p>
                                 <p><strong>Receptor:</strong> {dte.razon_social_receptor} ({dte.rut_receptor})</p>
                                 <p><strong>Giro:</strong> {dte.giro_receptor || 'No informado'}</p>
-                                <p><strong>Direccion:</strong> {dte.direccion_receptor || 'No informada'}</p>
-                                <p><strong>Region:</strong> {dte.region?.nombre || 'No informada'}</p>
+                                <p><strong>Dirección:</strong> {dte.direccion_receptor || 'No informada'}</p>
+                                <p><strong>Región:</strong> {dte.region?.nombre || 'No informada'}</p>
                                 <p><strong>Comuna:</strong> {dte.comuna?.nombre || 'No informada'}</p>
                             </div>
                             <div className="text-right">
@@ -79,13 +124,14 @@ export default function Show({ dte, tipoDte, detallesDte }) {
                         </div>
                     </div>
 
+
                     <div className="bg-white shadow sm:rounded-lg p-6">
                         <h3 className="text-lg font-medium mb-4">Detalles</h3>
                         <table className="min-w-full divide-y divide-gray-200">
                             <thead>
                                 <tr>
                                     <th className="px-4 py-2 text-left">Cant.</th>
-                                    <th className="px-4 py-2 text-left">Descripcion</th>
+                                    <th className="px-4 py-2 text-left">Descripción</th>
                                     <th className="px-4 py-2 text-right">P. Unit.</th>
                                     <th className="px-4 py-2 text-right">Subtotal</th>
                                 </tr>
@@ -144,16 +190,40 @@ export default function Show({ dte, tipoDte, detallesDte }) {
 
                     {yaFirmado && (
                         <div className="bg-green-50 p-6 rounded-lg">
-                            <p className="font-bold">Firmado por: {dte.firma.user.name}</p>
-                            {dte.firma.tipo_firma === 'texto' ? (
-                                <p>{dte.firma.firma_texto}</p>
-                            ) : (
-                                <img src={dte.firma.firma_canvas} alt="Firma" className="max-h-32" />
-                            )}
+                            <p className="font-bold mb-4">Firmado por: {dte.firma.user?.name ?? 'Usuario desconocido'}</p>
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+                                <div>
+                                    <p className="text-sm text-gray-600 mb-2">Firma</p>
+                                    <img
+                                        src={dte.firma.firma_canvas || generarFirmaTextoPng(dte.firma.firma_texto)}
+                                        alt="Firma"
+                                        className="max-h-32 border bg-white p-2 rounded"
+                                    />
+                                </div>
+                                <div>
+                                    <p className="text-sm text-gray-600 mb-2">Timbre electrónico</p>
+                                    {dte.timbre?.startsWith('data:image') ? (
+                                        <img
+                                            src={dte.timbre}
+                                            alt="Timbre Electrónico SII"
+                                            className="w-full max-w-[320px] border rounded bg-white p-2"
+                                        />
+                                    ) : (
+                                        <p className="text-sm text-gray-600 break-all">{dte.timbre || 'No disponible'}</p>
+                                    )}
+                                </div>
+                            </div>
                         </div>
                     )}
 
-                    <div className="flex gap-4">
+                    <div className="flex flex-wrap gap-4">
+                        <a href={route('dtes.download-xml', dte.id)} className="bg-slate-700 text-white px-6 py-2 rounded flex items-center gap-2">
+                            <Download size={18} /> Descargar XML
+                        </a>
+                        <a href={route('dtes.download-pdf', dte.id)} className="bg-slate-900 text-white px-6 py-2 rounded flex items-center gap-2">
+                            <Download size={18} /> Descargar PDF
+                        </a>
+
                         {estadoActual !== 'Anulada' && estadoActual !== 'Rechazada' && (
                             <>
                                 {estadoActual === 'Firmada' && (
@@ -174,7 +244,7 @@ export default function Show({ dte, tipoDte, detallesDte }) {
                             {dte.historial?.map((h) => (
                                 <li key={h.id} className="border-l-4 border-indigo-500 pl-4">
                                     <p><strong>{h.estado_nuevo}</strong> {new Date(h.created_at).toLocaleString()}</p>
-                                    <p className="text-sm text-gray-600">Por: {h.user.name} {h.comentario && `- ${h.comentario}`}</p>
+                                    <p className="text-sm text-gray-600">Por: {h.user?.name ?? 'Usuario desconocido'} {h.comentario && `- ${h.comentario}`}</p>
                                 </li>
                             ))}
                         </ul>
@@ -184,3 +254,7 @@ export default function Show({ dte, tipoDte, detallesDte }) {
         </AuthenticatedLayout>
     );
 }
+
+
+
+
