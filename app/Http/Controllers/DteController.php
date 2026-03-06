@@ -153,6 +153,10 @@ class DteController extends Controller
             ]);
         }
 
+        $dte->update([
+            'timbre' => $this->generarTimbreElectronico($dte),
+        ]);
+
         HistorialEstadoDte::create([
             'documento_dte_id' => $dte->id,
             'estado_anterior' => 'Creacion',
@@ -164,13 +168,23 @@ class DteController extends Controller
         return redirect()->route('dtes.show', $dte->id);
     }
 
-    public function show($dte)
+    public function show(DocumentoDte $dte)
     {
-        $dte = DocumentoDte::with(['region', 'comuna'])->where('id', $dte)->firstOrFail();
+        $this->authorize('ver-dtes');
+
+        $dte->load([
+            'region',
+            'comuna',
+            'firma.user',
+            'historial' => function ($query) {
+                $query->with('user')->orderBy('created_at');
+            },
+        ]);
+
+        $this->asegurarTimbreElectronico($dte);
+
         $tipoDte = TipoDte::where('id', $dte->tipo_dte_id)->first();
         $detallesDte = DetalleDte::where('documento_dte_id', $dte->id)->get();
-
-        $this->authorize('ver-dtes');
 
         return Inertia::render('Dtes/Show', [
             'dte' => $dte,
@@ -210,6 +224,8 @@ class DteController extends Controller
     {
         $this->authorize('enviar-dte');
 
+        $this->asegurarTimbreElectronico($dte);
+
         $pdf = Pdf::loadView('pdf.dte', ['dte' => $dte->load(['detalles', 'firma', 'user'])]);
         $pdfPath = storage_path('app/public/dtes/dte-' . $dte->id . '.pdf');
         if (!file_exists(storage_path('app/public/dtes'))) {
@@ -239,6 +255,124 @@ class DteController extends Controller
         return redirect()->route('dtes.show', $dte->id);
     }
 
+    public function descargarPdf(DocumentoDte $dte)
+    {
+        $this->authorize('ver-dtes');
+
+        $dte->load(['tipoDte', 'detalles', 'firma', 'user', 'region', 'comuna']);
+        $this->asegurarTimbreElectronico($dte);
+
+        $pdf = Pdf::loadView('pdf.dte', ['dte' => $dte]);
+
+        return $pdf->download('DTE-' . $dte->folio . '.pdf');
+    }
+
+    public function descargarXml(DocumentoDte $dte)
+    {
+        $this->authorize('ver-dtes');
+
+        $dte->load(['tipoDte', 'detalles', 'firma', 'user', 'region', 'comuna']);
+        $this->asegurarTimbreElectronico($dte);
+
+        $xml = view('xml.dte', ['dte' => $dte])->render();
+
+        return response($xml, 200, [
+            'Content-Type' => 'application/xml; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="DTE-' . $dte->folio . '.xml"',
+        ]);
+    }
+
+    private function asegurarTimbreElectronico(DocumentoDte $dte): void
+    {
+        if (!is_string($dte->timbre) || !str_starts_with($dte->timbre, 'data:image/')) {
+            $dte->timbre = $this->generarTimbreElectronico($dte);
+            $dte->save();
+        }
+    }
+
+    private function generarTimbreElectronico(DocumentoDte $dte): string
+    {
+        $seedSource = implode('|', [
+            (string) $dte->id,
+            (string) $dte->folio,
+            (string) $dte->rut_emisor,
+            (string) $dte->rut_receptor,
+            (string) round((float) $dte->monto_total),
+            (string) $dte->fecha_emision,
+            (string) $dte->created_at,
+        ]);
+
+        $seed = hash('sha256', $seedSource);
+        $rows = 58;
+        $cols = 260;
+        $module = 2;
+        $leftMargin = 20;
+        $topMargin = 14;
+        $rightMargin = 20;
+        $captionHeight = 40;
+
+        $barcodeWidth = $cols * $module;
+        $barcodeHeight = $rows * $module;
+        $width = $leftMargin + $barcodeWidth + $rightMargin;
+        $height = $topMargin + $barcodeHeight + $captionHeight;
+
+        $bits = '';
+        $counter = 0;
+        $needed = $rows * $cols;
+        while (strlen($bits) < $needed) {
+            $hashBytes = hash('sha256', $seed . '|' . $counter, true);
+            for ($i = 0; $i < strlen($hashBytes); $i++) {
+                $bits .= str_pad(decbin(ord($hashBytes[$i])), 8, '0', STR_PAD_LEFT);
+            }
+            $counter++;
+        }
+
+        $svg = [];
+        $svg[] = '<svg xmlns="http://www.w3.org/2000/svg" width="' . $width . '" height="' . $height . '" viewBox="0 0 ' . $width . ' ' . $height . '">';
+        $svg[] = '<rect width="100%" height="100%" fill="#ffffff"/>';
+
+        $xStart = $leftMargin;
+        $yStart = $topMargin;
+
+        // Barras laterales para aproximar estilo de timbre SII.
+        for ($i = 0; $i < 8; $i++) {
+            $barXLeft = $xStart - 16 + ($i * 2);
+            $barXRight = $xStart + $barcodeWidth + 2 + ($i * 2);
+            $barWidth = ($i % 2 === 0) ? 2 : 1;
+            $svg[] = '<rect x="' . $barXLeft . '" y="' . $yStart . '" width="' . $barWidth . '" height="' . $barcodeHeight . '" fill="#000"/>';
+            $svg[] = '<rect x="' . $barXRight . '" y="' . $yStart . '" width="' . $barWidth . '" height="' . $barcodeHeight . '" fill="#000"/>';
+        }
+
+        // Dibujo run-length para compactar el SVG.
+        for ($row = 0; $row < $rows; $row++) {
+            $base = $row * $cols;
+            $col = 0;
+            while ($col < $cols) {
+                $idx = $base + $col;
+                if ($bits[$idx] !== '1') {
+                    $col++;
+                    continue;
+                }
+
+                $run = 1;
+                while (($col + $run) < $cols && $bits[$base + $col + $run] === '1') {
+                    $run++;
+                }
+
+                $x = $xStart + ($col * $module);
+                $y = $yStart + ($row * $module);
+                $w = $run * $module;
+                $svg[] = '<rect x="' . $x . '" y="' . $y . '" width="' . $w . '" height="' . $module . '" fill="#000"/>';
+
+                $col += $run;
+            }
+        }
+
+        $svg[] = '<text x="' . ($width / 2) . '" y="' . ($height - 12) . '" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" fill="#111">Timbre Electrónico SII (Simulado)</text>';
+        $svg[] = '</svg>';
+
+        return 'data:image/svg+xml;base64,' . base64_encode(implode('', $svg));
+    }
     private function cambiarEstado(DocumentoDte $dte, $nuevoEstado, $comentario)
     {
         HistorialEstadoDte::create([
@@ -279,3 +413,16 @@ class DteController extends Controller
         return $pdf->download('reporte-general-dtes-' . now()->format('Ymd-His') . '.pdf');
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
