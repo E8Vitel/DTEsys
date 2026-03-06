@@ -5,10 +5,6 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-/**
- * Modelo principal Documento DTE
- * Relaciones completas con historial, detalles y firma
- */
 class DocumentoDte extends Model
 {
     use HasFactory;
@@ -16,10 +12,24 @@ class DocumentoDte extends Model
     protected $table = 'documentos_dte';
 
     protected $fillable = [
-        'tipo_dte_id', 'user_id', 'folio', 'fecha_emision',
-        'rut_emisor', 'razon_social_emisor', 'rut_receptor',
-        'razon_social_receptor', 'monto_neto', 'iva', 'monto_total',
-        'timbre', 'xml_generado', 'pdf_path'
+        'tipo_dte_id',
+        'user_id',
+        'folio',
+        'fecha_emision',
+        'rut_emisor',
+        'razon_social_emisor',
+        'rut_receptor',
+        'razon_social_receptor',
+        'giro_receptor',
+        'direccion_receptor',
+        'region_id',
+        'comuna_id',
+        'monto_neto',
+        'iva',
+        'monto_total',
+        'timbre',
+        'xml_generado',
+        'pdf_path',
     ];
 
     public function tipoDte()
@@ -30,6 +40,16 @@ class DocumentoDte extends Model
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function region()
+    {
+        return $this->belongsTo(Region::class);
+    }
+
+    public function comuna()
+    {
+        return $this->belongsTo(Comuna::class);
     }
 
     public function detalles()

@@ -2,26 +2,25 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Comuna;
 use App\Models\DetalleDte;
 use App\Models\DocumentoDte;
 use App\Models\FirmaDte;
-use App\Models\TipoDte;
 use App\Models\HistorialEstadoDte;
+use App\Models\Region;
+use App\Models\TipoDte;
 use Barryvdh\DomPDF\Facade\Pdf;
-use Illuminate\Foundation\Auth\Access\AuthorizesRequests; // ← este es el trait clave
+use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Gate; // ← fallback por si acaso
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 
-/**
- * Controlador principal para gestión de DTE
- */
 class DteController extends Controller
 {
-    use AuthorizesRequests; // ← agrégalo aquí, es obligatorio
+    use AuthorizesRequests;
 
     public function index(Request $request)
     {
@@ -75,10 +74,10 @@ class DteController extends Controller
 
     public function create()
     {
-        $tipos = \App\Models\TipoDte::all();
-
         return Inertia::render('Dtes/Create', [
-            'tipos' => $tipos,
+            'tipos' => TipoDte::all(),
+            'regiones' => Region::query()->orderBy('nombre')->get(['id', 'codigo', 'nombre']),
+            'comunas' => Comuna::query()->orderBy('nombre')->get(['id', 'region_id', 'nombre']),
         ]);
     }
 
@@ -88,6 +87,27 @@ class DteController extends Controller
             'tipo_dte_id' => 'required|exists:tipos_dte,id',
             'rut_receptor' => 'required|string|max:12',
             'razon_social_receptor' => 'required|string|max:255',
+            'giro_receptor' => 'nullable|string|max:255',
+            'direccion_receptor' => 'nullable|string|max:255',
+            'region_id' => 'nullable|exists:regiones,id',
+            'comuna_id' => [
+                'nullable',
+                'exists:comunas,id',
+                function ($attribute, $value, $fail) use ($request) {
+                    if (!$value || !$request->filled('region_id')) {
+                        return;
+                    }
+
+                    $perteneceARegion = Comuna::query()
+                        ->where('id', $value)
+                        ->where('region_id', $request->region_id)
+                        ->exists();
+
+                    if (!$perteneceARegion) {
+                        $fail('La comuna no pertenece a la region seleccionada.');
+                    }
+                },
+            ],
             'detalles' => 'required|array|min:1',
             'detalles.*.cantidad' => 'required|numeric|min:1',
             'detalles.*.descripcion' => 'required|string|max:255',
@@ -95,7 +115,7 @@ class DteController extends Controller
         ]);
 
         $user = Auth::user();
-        $tipo = \App\Models\TipoDte::find($validated['tipo_dte_id']);
+        $tipo = TipoDte::find($validated['tipo_dte_id']);
 
         $monto_neto = 0;
         foreach ($validated['detalles'] as $det) {
@@ -113,6 +133,10 @@ class DteController extends Controller
             'razon_social_emisor' => 'DTEsys SPA',
             'rut_receptor' => $validated['rut_receptor'],
             'razon_social_receptor' => $validated['razon_social_receptor'],
+            'giro_receptor' => $validated['giro_receptor'] ?? null,
+            'direccion_receptor' => $validated['direccion_receptor'] ?? null,
+            'region_id' => $validated['region_id'] ?? null,
+            'comuna_id' => $validated['comuna_id'] ?? null,
             'monto_neto' => $monto_neto,
             'iva' => $iva,
             'monto_total' => $total,
@@ -131,10 +155,10 @@ class DteController extends Controller
 
         HistorialEstadoDte::create([
             'documento_dte_id' => $dte->id,
-            'estado_anterior' => null,
+            'estado_anterior' => 'Creacion',
             'estado_nuevo' => 'Borrador',
             'user_id' => $user->id,
-            'comentario' => 'Creación del documento',
+            'comentario' => 'Creacion del documento',
         ]);
 
         return redirect()->route('dtes.show', $dte->id);
@@ -142,8 +166,8 @@ class DteController extends Controller
 
     public function show($dte)
     {
-        $dte = DocumentoDte::where('id', $dte)->firstOrFail();
-        $tipoDte = TipoDte::where('id', $dte->tipo_dte_id)->first(); // Carga el tipo de DTE
+        $dte = DocumentoDte::with(['region', 'comuna'])->where('id', $dte)->firstOrFail();
+        $tipoDte = TipoDte::where('id', $dte->tipo_dte_id)->first();
         $detallesDte = DetalleDte::where('documento_dte_id', $dte->id)->get();
 
         $this->authorize('ver-dtes');
@@ -195,11 +219,11 @@ class DteController extends Controller
 
         $dte->update(['pdf_path' => $pdfPath]);
 
-        Mail::raw('Simulación: DTE #' . $dte->folio . ' enviado a receptor.', function ($message) use ($dte) {
+        Mail::raw('Simulacion: DTE #' . $dte->folio . ' enviado a receptor.', function ($message) use ($dte) {
             $message->to('receptor@test.cl')->subject('DTE Simulado');
         });
 
-        $this->cambiarEstado($dte, 'Enviada', 'Envío simulado por correo');
+        $this->cambiarEstado($dte, 'Enviada', 'Envio simulado por correo');
 
         return redirect()->route('dtes.show', $dte->id)->with('success', 'Enviado simulado');
     }
@@ -232,7 +256,6 @@ class DteController extends Controller
 
         $query = DocumentoDte::with(['tipoDte', 'user', 'firma', 'historial']);
 
-        // Filtros simples (opcional)
         if ($request->estado) {
             $query->whereHas('historial', function ($q) use ($request) {
                 $q->where('estado_nuevo', $request->estado);
@@ -255,5 +278,4 @@ class DteController extends Controller
 
         return $pdf->download('reporte-general-dtes-' . now()->format('Ymd-His') . '.pdf');
     }
-
 }
