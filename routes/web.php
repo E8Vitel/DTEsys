@@ -1,18 +1,16 @@
 <?php
 
-use App\Http\Controllers\DteController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DteController;
 use App\Http\Controllers\ProfileController;
-use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
-use Inertia\Inertia;
 
 Route::get('/', function () {
     if (auth()->check()) {
-        Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
-    } else {
-        return redirect()->route('login');
+        return redirect()->route('dashboard');
     }
+
+    return redirect()->route('login');
 });
 
 Route::middleware('auth')->group(function () {
@@ -55,16 +53,14 @@ Route::middleware('auth')->group(function () {
     // Reportes
     Route::middleware('can:ver-reportes')->get('/reportes/general', [App\Http\Controllers\DteController::class, 'reporteGeneral'])->name('reportes.general');
     Route::middleware('can:ver-reportes')->get('/reportes/export-excel', [DteController::class, 'exportExcel'])->name('reportes.export-excel');
-
 });
 
-Route::middleware(['auth', 'role:admin'])->group(function () {
+Route::middleware(['auth', 'can:gestionar-usuarios'])->group(function () {
     Route::get('/usuarios', [App\Http\Controllers\UserController::class, 'index'])->name('usuarios.index');
     Route::post('/usuarios/{user}/asignar-rol', [App\Http\Controllers\UserController::class, 'asignarRol'])->name('usuarios.asignar-rol');
     Route::post('/usuarios/{user}/quitar-rol', [App\Http\Controllers\UserController::class, 'quitarRol'])->name('usuarios.quitar-rol');
+    Route::post('/usuarios/{user}/asignar-permiso', [App\Http\Controllers\UserController::class, 'asignarPermiso'])->name('usuarios.asignar-permiso');
+    Route::post('/usuarios/{user}/quitar-permiso', [App\Http\Controllers\UserController::class, 'quitarPermiso'])->name('usuarios.quitar-permiso');
 });
 
-
 require __DIR__.'/auth.php';
-
-

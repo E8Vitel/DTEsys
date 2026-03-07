@@ -1,10 +1,12 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import { useAppDialog } from '@/Components/AppDialog';
 import { Head, router } from '@inertiajs/react';
 import SignatureCanvas from 'react-signature-canvas';
-import { Mail, Ban, Download } from 'lucide-react';
+import { Ban, Download, Mail } from 'lucide-react';
 
 export default function Show({ dte, tipoDte, detallesDte }) {
+    const dialog = useAppDialog();
     const [firmaTipo, setFirmaTipo] = useState('texto');
     const [firmaTexto, setFirmaTexto] = useState('');
     const sigCanvas = React.useRef(null);
@@ -40,7 +42,7 @@ export default function Show({ dte, tipoDte, detallesDte }) {
         return canvas.toDataURL('image/png');
     };
 
-    const firmar = (e) => {
+    const firmar = async (e) => {
         e.preventDefault();
 
         const payload = {
@@ -51,14 +53,22 @@ export default function Show({ dte, tipoDte, detallesDte }) {
 
         if (firmaTipo === 'canvas') {
             if (!sigCanvas.current || sigCanvas.current.isEmpty()) {
-                alert('Debes dibujar la firma en el canvas.');
+                await dialog.alert({
+                    type: 'warning',
+                    title: 'Firma requerida',
+                    message: 'Debes dibujar la firma en el canvas.',
+                });
                 return;
             }
 
             payload.firma_canvas = sigCanvas.current.toDataURL('image/png');
         } else {
             if (!firmaTexto.trim()) {
-                alert('Debes ingresar la firma en texto.');
+                await dialog.alert({
+                    type: 'warning',
+                    title: 'Firma requerida',
+                    message: 'Debes ingresar la firma en texto.',
+                });
                 return;
             }
 
@@ -68,28 +78,49 @@ export default function Show({ dte, tipoDte, detallesDte }) {
         setProcFirma(true);
 
         router.post(route('dtes.firmar', dte.id), payload, {
-            onSuccess: () => {
+            onSuccess: async () => {
                 setFirmaTexto('');
                 setFirmaTipo('texto');
                 if (sigCanvas.current) {
                     sigCanvas.current.clear();
                 }
-                alert('Firmado exitosamente');
+
+                await dialog.alert({
+                    type: 'success',
+                    title: 'Firma registrada',
+                    message: 'El DTE fue firmado exitosamente.',
+                });
             },
             onFinish: () => setProcFirma(false),
         });
     };
 
-    const enviar = () => {
-        if (confirm('¿Enviar simulado por correo?')) {
+    const enviar = async () => {
+        const confirmado = await dialog.confirm({
+            type: 'info',
+            title: 'Enviar DTE',
+            message: 'Se enviara el DTE por correo (simulado).',
+            confirmText: 'Enviar',
+        });
+
+        if (confirmado) {
             router.post(route('dtes.enviar', dte.id));
         }
     };
 
-    const anular = () => {
-        const comentario = prompt('Comentario para anulación:');
-        if (comentario) {
-            router.post(route('dtes.anular', dte.id), { comentario });
+    const anular = async () => {
+        const comentario = await dialog.prompt({
+            type: 'warning',
+            title: 'Anular DTE',
+            message: 'Ingresa un comentario para registrar la anulacion.',
+            inputLabel: 'Comentario',
+            inputPlaceholder: 'Motivo de la anulacion',
+            inputRequired: true,
+            confirmText: 'Anular',
+        });
+
+        if (comentario !== null) {
+            router.post(route('dtes.anular', dte.id), { comentario: comentario.trim() });
         }
     };
 
@@ -106,12 +137,12 @@ export default function Show({ dte, tipoDte, detallesDte }) {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div>
                                 <p><strong>Tipo:</strong> {tipoDte?.nombre} - ({tipoDte?.codigo})</p>
-                                <p><strong>Fecha Emisión:</strong> {new Date(dte.fecha_emision).toLocaleDateString()}</p>
+                                <p><strong>Fecha Emision:</strong> {new Date(dte.fecha_emision).toLocaleDateString()}</p>
                                 <p><strong>Emisor:</strong> {dte.razon_social_emisor} ({dte.rut_emisor})</p>
                                 <p><strong>Receptor:</strong> {dte.razon_social_receptor} ({dte.rut_receptor})</p>
                                 <p><strong>Giro:</strong> {dte.giro_receptor || 'No informado'}</p>
-                                <p><strong>Dirección:</strong> {dte.direccion_receptor || 'No informada'}</p>
-                                <p><strong>Región:</strong> {dte.region?.nombre || 'No informada'}</p>
+                                <p><strong>Direccion:</strong> {dte.direccion_receptor || 'No informada'}</p>
+                                <p><strong>Region:</strong> {dte.region?.nombre || 'No informada'}</p>
                                 <p><strong>Comuna:</strong> {dte.comuna?.nombre || 'No informada'}</p>
                             </div>
                             <div className="text-right">
@@ -131,7 +162,7 @@ export default function Show({ dte, tipoDte, detallesDte }) {
                             <thead>
                                 <tr>
                                     <th className="px-4 py-2 text-left">Cant.</th>
-                                    <th className="px-4 py-2 text-left">Descripción</th>
+                                    <th className="px-4 py-2 text-left">Descripcion</th>
                                     <th className="px-4 py-2 text-right">P. Unit.</th>
                                     <th className="px-4 py-2 text-right">Subtotal</th>
                                 </tr>
@@ -201,11 +232,11 @@ export default function Show({ dte, tipoDte, detallesDte }) {
                                     />
                                 </div>
                                 <div>
-                                    <p className="text-sm text-gray-600 mb-2">Timbre electrónico</p>
+                                    <p className="text-sm text-gray-600 mb-2">Timbre electronico</p>
                                     {dte.timbre?.startsWith('data:image') ? (
                                         <img
                                             src={dte.timbre}
-                                            alt="Timbre Electrónico SII"
+                                            alt="Timbre Electronico SII"
                                             className="w-full max-w-[320px] border rounded bg-white p-2"
                                         />
                                     ) : (
@@ -254,7 +285,3 @@ export default function Show({ dte, tipoDte, detallesDte }) {
         </AuthenticatedLayout>
     );
 }
-
-
-
-

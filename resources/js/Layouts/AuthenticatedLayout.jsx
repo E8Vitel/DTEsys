@@ -1,4 +1,4 @@
-import ApplicationLogo from '@/Components/ApplicationLogo';
+﻿import ApplicationLogo from '@/Components/ApplicationLogo';
 import Dropdown from '@/Components/Dropdown';
 import NavLink from '@/Components/NavLink';
 import ResponsiveNavLink from '@/Components/ResponsiveNavLink';
@@ -6,7 +6,11 @@ import { Link, usePage } from '@inertiajs/react';
 import { useState } from 'react';
 
 export default function AuthenticatedLayout({ header, children }) {
-    const user = usePage().props.auth.user;
+    const { auth } = usePage().props;
+    const user = auth.user;
+    const permissions = auth.permissions ?? [];
+    const roles = auth.roles ?? [];
+    const canManageUsers = permissions.includes('gestionar-usuarios') || roles.includes('admin');
 
     const [showingNavigationDropdown, setShowingNavigationDropdown] =
         useState(false);
@@ -30,6 +34,15 @@ export default function AuthenticatedLayout({ header, children }) {
                                 >
                                     Dashboard
                                 </NavLink>
+
+                                {canManageUsers && (
+                                    <NavLink
+                                        href={route('usuarios.index')}
+                                        active={route().current('usuarios.*')}
+                                    >
+                                        Usuarios
+                                    </NavLink>
+                                )}
                             </div>
                         </div>
 
@@ -134,6 +147,15 @@ export default function AuthenticatedLayout({ header, children }) {
                         >
                             Dashboard
                         </ResponsiveNavLink>
+
+                        {canManageUsers && (
+                            <ResponsiveNavLink
+                                href={route('usuarios.index')}
+                                active={route().current('usuarios.*')}
+                            >
+                                Usuarios
+                            </ResponsiveNavLink>
+                        )}
                     </div>
 
                     <div className="border-t border-gray-200 pb-1 pt-4">
