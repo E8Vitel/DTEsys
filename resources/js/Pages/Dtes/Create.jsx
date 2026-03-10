@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, useForm } from '@inertiajs/react';
 import { Plus, Trash2 } from 'lucide-react';
@@ -12,8 +12,18 @@ export default function Create({ tipos, regiones, comunas }) {
         direccion_receptor: '',
         region_id: '',
         comuna_id: '',
+        direccion_destino: '',
+        transporte_patente: '',
+        transporte_rut_chofer: '',
+        transporte_nombre_chofer: '',
         detalles: [{ cantidad: 1, descripcion: '', precio_unitario: 0 }],
     });
+
+    const tipoSeleccionado = useMemo(() => {
+        return tipos.find((tipo) => String(tipo.id) === String(data.tipo_dte_id));
+    }, [tipos, data.tipo_dte_id]);
+
+    const esGuiaDespacho = tipoSeleccionado?.codigo === '52';
 
     const formatoCLP = (valor) =>
         new Intl.NumberFormat('es-CL', {
@@ -72,11 +82,9 @@ export default function Create({ tipos, regiones, comunas }) {
         post(route('dtes.store'));
     };
 
-    const hoy = new Date().toLocaleDateString('es-CL');
-
     return (
         <AuthenticatedLayout
-            header={<h2 className="text-xl font-semibold">Emisión de DTE</h2>}
+            header={<h2 className="text-xl font-semibold">Emision de DTE</h2>}
         >
             <Head title="Crear DTE" />
 
@@ -87,8 +95,8 @@ export default function Create({ tipos, regiones, comunas }) {
                             <div className="border-b border-gray-200 px-6 py-5 md:px-8">
                                 <div className="grid gap-4 md:grid-cols-3">
                                     <div className="md:col-span-2">
-                                        <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Documento Tributario Electrónico</p>
-                                        <h1 className="text-2xl font-bold text-gray-900">Formulario de Emisión</h1>
+                                        <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Documento Tributario Electronico</p>
+                                        <h1 className="text-2xl font-bold text-gray-900">Formulario de Emision</h1>
                                         <p className="mt-1 text-sm text-gray-500">Completa los datos del receptor y el detalle del documento.</p>
                                     </div>
                                 </div>
@@ -99,9 +107,9 @@ export default function Create({ tipos, regiones, comunas }) {
                                     <div className="rounded-lg border border-gray-200 p-4">
                                         <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-500">Emisor</h3>
                                         <div className="mt-3 space-y-2 text-sm text-gray-700">
-                                            <p><span className="font-semibold">Razón Social:</span> DTEsys SPA</p>
-                                            <p><span className="font-semibold">RUT:</span> Según usuario autenticado</p>
-                                            <p><span className="font-semibold">Giro:</span> Servicios tecnológicos</p>
+                                            <p><span className="font-semibold">Razon Social:</span> DTEsys SPA</p>
+                                            <p><span className="font-semibold">RUT:</span> Segun usuario autenticado</p>
+                                            <p><span className="font-semibold">Giro:</span> Servicios tecnologicos</p>
                                         </div>
                                     </div>
 
@@ -142,7 +150,7 @@ export default function Create({ tipos, regiones, comunas }) {
                                         </div>
 
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700">Razón Social</label>
+                                            <label className="block text-sm font-medium text-gray-700">Razon Social</label>
                                             <input
                                                 type="text"
                                                 value={data.razon_social_receptor}
@@ -160,19 +168,19 @@ export default function Create({ tipos, regiones, comunas }) {
                                                 value={data.giro_receptor}
                                                 onChange={(e) => setData('giro_receptor', e.target.value)}
                                                 className="mt-1 block w-full rounded-md border-gray-300 shadow-sm"
-                                                placeholder="Actividad económica"
+                                                placeholder="Actividad economica"
                                             />
                                             {errors.giro_receptor && <p className="mt-1 text-sm text-red-600">{errors.giro_receptor}</p>}
                                         </div>
 
                                         <div>
-                                            <label className="block text-sm font-medium text-gray-700">Región</label>
+                                            <label className="block text-sm font-medium text-gray-700">Region</label>
                                             <select
                                                 value={data.region_id}
                                                 onChange={(e) => setData('region_id', e.target.value)}
                                                 className="mt-1 block w-full rounded-md border-gray-300 shadow-sm"
                                             >
-                                                <option value="">Seleccione región...</option>
+                                                <option value="">Seleccione region...</option>
                                                 {regiones.map((region) => (
                                                     <option key={region.id} value={region.id}>
                                                         {region.codigo} - {region.nombre}
@@ -201,7 +209,7 @@ export default function Create({ tipos, regiones, comunas }) {
                                         </div>
 
                                         <div className="md:col-span-2">
-                                            <label className="block text-sm font-medium text-gray-700">Dirección</label>
+                                            <label className="block text-sm font-medium text-gray-700">Direccion</label>
                                             <input
                                                 type="text"
                                                 value={data.direccion_receptor}
@@ -213,6 +221,60 @@ export default function Create({ tipos, regiones, comunas }) {
                                         </div>
                                     </div>
                                 </div>
+
+                                {esGuiaDespacho && (
+                                    <div className="mt-6 rounded-lg border border-amber-300 bg-amber-50 p-4">
+                                        <h3 className="text-sm font-semibold uppercase tracking-wide text-amber-800">Datos de transporte (Guia DTE 52)</h3>
+                                        <p className="mt-1 text-xs text-amber-700">Estos campos seran obligatorios por Anexo 2.5 desde 2026-05-01.</p>
+                                        <div className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-2">
+                                            <div className="md:col-span-2">
+                                                <label className="block text-sm font-medium text-gray-700">Direccion destino</label>
+                                                <input
+                                                    type="text"
+                                                    value={data.direccion_destino}
+                                                    onChange={(e) => setData('direccion_destino', e.target.value)}
+                                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm"
+                                                />
+                                                {errors.direccion_destino && <p className="mt-1 text-sm text-red-600">{errors.direccion_destino}</p>}
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700">Patente</label>
+                                                <input
+                                                    type="text"
+                                                    value={data.transporte_patente}
+                                                    onChange={(e) => setData('transporte_patente', e.target.value)}
+                                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm"
+                                                    placeholder="ABCD12"
+                                                />
+                                                {errors.transporte_patente && <p className="mt-1 text-sm text-red-600">{errors.transporte_patente}</p>}
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700">RUT chofer</label>
+                                                <input
+                                                    type="text"
+                                                    value={data.transporte_rut_chofer}
+                                                    onChange={(e) => setData('transporte_rut_chofer', e.target.value)}
+                                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm"
+                                                    placeholder="12.345.678-9"
+                                                />
+                                                {errors.transporte_rut_chofer && <p className="mt-1 text-sm text-red-600">{errors.transporte_rut_chofer}</p>}
+                                            </div>
+
+                                            <div className="md:col-span-2">
+                                                <label className="block text-sm font-medium text-gray-700">Nombre chofer</label>
+                                                <input
+                                                    type="text"
+                                                    value={data.transporte_nombre_chofer}
+                                                    onChange={(e) => setData('transporte_nombre_chofer', e.target.value)}
+                                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm"
+                                                />
+                                                {errors.transporte_nombre_chofer && <p className="mt-1 text-sm text-red-600">{errors.transporte_nombre_chofer}</p>}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
 
                                 <div className="mt-6 rounded-lg border border-gray-200 p-4">
                                     <div className="mb-4 flex items-center justify-between">
@@ -232,10 +294,10 @@ export default function Create({ tipos, regiones, comunas }) {
                                                 <tr>
                                                     <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-gray-600">#</th>
                                                     <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-gray-600">Cantidad</th>
-                                                    <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-gray-600">Descripción</th>
+                                                    <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-gray-600">Descripcion</th>
                                                     <th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wider text-gray-600">Precio Unit.</th>
                                                     <th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wider text-gray-600">Subtotal</th>
-                                                    <th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wider text-gray-600">Acción</th>
+                                                    <th className="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wider text-gray-600">Accion</th>
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-gray-100 bg-white">
@@ -261,7 +323,7 @@ export default function Create({ tipos, regiones, comunas }) {
                                                                     value={det.descripcion}
                                                                     onChange={(e) => handleDetalleChange(index, 'descripcion', e.target.value)}
                                                                     className="block w-full rounded-md border-gray-300 text-sm shadow-sm"
-                                                                    placeholder="Descripción del bien o servicio"
+                                                                    placeholder="Descripcion del bien o servicio"
                                                                 />
                                                             </td>
                                                             <td className="px-3 py-2">
@@ -329,5 +391,3 @@ export default function Create({ tipos, regiones, comunas }) {
         </AuthenticatedLayout>
     );
 }
-
-

@@ -53,6 +53,16 @@
     <MontoItem>{{ (int) round($det->subtotal) }}</MontoItem>
    </Detalle>
 @endforeach
+@if(($dte->tipoDte?->codigo ?? null) === '52')
+   <Transporte>
+    <DirDest>{{ $dte->direccion_destino ?? $dte->direccion_receptor ?? 'DIRECCION NO INFORMADA' }}</DirDest>
+    <Patente>{{ $dte->transporte_patente ?? '' }}</Patente>
+    <Chofer>
+      <RUTChofer>{{ $dte->transporte_rut_chofer ?? '' }}</RUTChofer>
+      <NombreChofer>{{ $dte->transporte_nombre_chofer ?? '' }}</NombreChofer>
+    </Chofer>
+   </Transporte>
+@endif
    <TmstFirma>{{ now()->format('Y-m-d\\TH:i:s') }}</TmstFirma>
   </Documento>
  </DTE>

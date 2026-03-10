@@ -3,7 +3,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { useAppDialog } from '@/Components/AppDialog';
 import { Head, router } from '@inertiajs/react';
 import SignatureCanvas from 'react-signature-canvas';
-import { Ban, Download, Mail } from 'lucide-react';
+import { Ban, CheckCircle2, Download, Send, XCircle } from 'lucide-react';
 
 export default function Show({ dte, tipoDte, detallesDte }) {
     const dialog = useAppDialog();
@@ -95,17 +95,56 @@ export default function Show({ dte, tipoDte, detallesDte }) {
         });
     };
 
-    const enviar = async () => {
+    const enviarSii = async () => {
         const confirmado = await dialog.confirm({
             type: 'info',
-            title: 'Enviar DTE',
-            message: 'Se enviara el DTE por correo (simulado).',
+            title: 'Enviar al SII',
+            message: 'Se enviara el DTE al SII para validacion (simulado).',
             confirmText: 'Enviar',
         });
 
         if (confirmado) {
-            router.post(route('dtes.enviar', dte.id));
+            router.post('/dtes/' + dte.id + '/enviar-sii');
         }
+    };
+
+    const enviarReceptor = async () => {
+        const confirmado = await dialog.confirm({
+            type: 'info',
+            title: 'Enviar al receptor',
+            message: 'Se enviara XML y PDF al receptor (simulado).',
+            confirmText: 'Enviar',
+        });
+
+        if (confirmado) {
+            router.post('/dtes/' + dte.id + '/enviar-receptor');
+        }
+    };
+
+    const registrarAcuse = async (respuesta) => {
+        let comentario = '';
+
+        if (respuesta !== 'aceptado') {
+            const valor = await dialog.prompt({
+                type: 'warning',
+                title: 'Comentario requerido',
+                message: 'Debes indicar motivo para rechazo o reparo.',
+                inputLabel: 'Comentario',
+                inputRequired: true,
+                confirmText: 'Registrar',
+            });
+
+            if (valor === null) {
+                return;
+            }
+
+            comentario = valor.trim();
+        }
+
+        router.post('/dtes/' + dte.id + '/acuse-receptor', {
+            respuesta,
+            comentario,
+        });
     };
 
     const anular = async () => {
@@ -127,6 +166,10 @@ export default function Show({ dte, tipoDte, detallesDte }) {
     const estadoActual = dte.historial?.length > 0 ? dte.historial[dte.historial.length - 1].estado_nuevo : 'Borrador';
     const yaFirmado = !!dte.firma;
 
+    const puedeEnviarSii = estadoActual === 'Firmada' || estadoActual === 'Rechazada SII';
+    const puedeEnviarReceptor = estadoActual === 'Aceptada SII';
+    const puedeRegistrarAcuse = estadoActual === 'Enviada Receptor';
+
     return (
         <AuthenticatedLayout header={<h2 className="text-xl font-semibold">Detalle DTE: {dte.folio}</h2>}>
             <Head title={`DTE ${dte.folio}`} />
@@ -136,7 +179,7 @@ export default function Show({ dte, tipoDte, detallesDte }) {
                     <div className="bg-white shadow sm:rounded-lg p-6">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div>
-                                <p><strong>Tipo:</strong> {tipoDte?.nombre} - ({tipoDte?.codigo})</p>
+                                <p><strong>Tipo:</strong> {tipoDte?.nombre} ({tipoDte?.codigo})</p>
                                 <p><strong>Fecha Emision:</strong> {new Date(dte.fecha_emision).toLocaleDateString()}</p>
                                 <p><strong>Emisor:</strong> {dte.razon_social_emisor} ({dte.rut_emisor})</p>
                                 <p><strong>Receptor:</strong> {dte.razon_social_receptor} ({dte.rut_receptor})</p>
@@ -144,17 +187,29 @@ export default function Show({ dte, tipoDte, detallesDte }) {
                                 <p><strong>Direccion:</strong> {dte.direccion_receptor || 'No informada'}</p>
                                 <p><strong>Region:</strong> {dte.region?.nombre || 'No informada'}</p>
                                 <p><strong>Comuna:</strong> {dte.comuna?.nombre || 'No informada'}</p>
+                                {tipoDte?.codigo === '52' && (
+                                    <>
+                                        <p><strong>Destino:</strong> {dte.direccion_destino || 'No informado'}</p>
+                                        <p><strong>Patente:</strong> {dte.transporte_patente || 'No informada'}</p>
+                                        <p><strong>Chofer:</strong> {(dte.transporte_nombre_chofer || 'No informado')} ({dte.transporte_rut_chofer || 'Sin RUT'})</p>
+                                    </>
+                                )}
                             </div>
                             <div className="text-right">
-                                <p className="text-3xl font-bold">${dte.monto_total.toLocaleString()}</p>
-                                <p className="text-sm">Neto: ${dte.monto_neto.toLocaleString()} | IVA: ${dte.iva.toLocaleString()}</p>
+                                <p className="text-3xl font-bold">${Number(dte.monto_total).toLocaleString()}</p>
+                                <p className="text-sm">Neto: ${Number(dte.monto_neto).toLocaleString()} | IVA: ${Number(dte.iva).toLocaleString()}</p>
                                 <p className="mt-4">
                                     <strong>Estado:</strong> <span className="px-3 py-1 rounded bg-blue-100 text-blue-800">{estadoActual}</span>
                                 </p>
+                                <div className="mt-3 text-sm text-gray-700 space-y-1">
+                                    <p><strong>SII:</strong> {dte.estado_sii || 'No enviado'}</p>
+                                    <p><strong>Track ID:</strong> {dte.track_id || 'No asignado'}</p>
+                                    <p><strong>Respuesta SII:</strong> {dte.codigo_respuesta_sii || '-'} {dte.mensaje_respuesta_sii ? `- ${dte.mensaje_respuesta_sii}` : ''}</p>
+                                    <p><strong>Acuse receptor:</strong> {dte.estado_receptor || 'Sin acuse'}</p>
+                                </div>
                             </div>
                         </div>
                     </div>
-
 
                     <div className="bg-white shadow sm:rounded-lg p-6">
                         <h3 className="text-lg font-medium mb-4">Detalles</h3>
@@ -172,15 +227,15 @@ export default function Show({ dte, tipoDte, detallesDte }) {
                                     <tr key={det.id}>
                                         <td className="px-4 py-2">{det.cantidad}</td>
                                         <td className="px-4 py-2">{det.descripcion}</td>
-                                        <td className="px-4 py-2 text-right">${det.precio_unitario.toLocaleString()}</td>
-                                        <td className="px-4 py-2 text-right">${det.subtotal.toLocaleString()}</td>
+                                        <td className="px-4 py-2 text-right">${Number(det.precio_unitario).toLocaleString()}</td>
+                                        <td className="px-4 py-2 text-right">${Number(det.subtotal).toLocaleString()}</td>
                                     </tr>
                                 ))}
                             </tbody>
                         </table>
                     </div>
 
-                    {!yaFirmado && (
+                    {!yaFirmado && estadoActual === 'Borrador' && (
                         <div className="bg-white shadow sm:rounded-lg p-6">
                             <h3 className="text-lg font-medium mb-4">Firma Digital Simulada</h3>
                             <div className="flex gap-4 mb-4">
@@ -255,17 +310,36 @@ export default function Show({ dte, tipoDte, detallesDte }) {
                             <Download size={18} /> Descargar PDF
                         </a>
 
-                        {estadoActual !== 'Anulada' && estadoActual !== 'Rechazada' && (
+                        {puedeEnviarSii && (
+                            <button onClick={enviarSii} className="bg-blue-600 text-white px-6 py-2 rounded flex items-center gap-2">
+                                <Send size={18} /> Enviar al SII
+                            </button>
+                        )}
+
+                        {puedeEnviarReceptor && (
+                            <button onClick={enviarReceptor} className="bg-cyan-700 text-white px-6 py-2 rounded flex items-center gap-2">
+                                <Send size={18} /> Enviar al Receptor
+                            </button>
+                        )}
+
+                        {puedeRegistrarAcuse && (
                             <>
-                                {estadoActual === 'Firmada' && (
-                                    <button onClick={enviar} className="bg-blue-600 text-white px-6 py-2 rounded flex items-center gap-2">
-                                        <Mail size={18} /> Enviar por Correo (Simulado)
-                                    </button>
-                                )}
-                                <button onClick={anular} className="bg-red-600 text-white px-6 py-2 rounded flex items-center gap-2">
-                                    <Ban size={18} /> Anular
+                                <button onClick={() => registrarAcuse('aceptado')} className="bg-emerald-600 text-white px-6 py-2 rounded flex items-center gap-2">
+                                    <CheckCircle2 size={18} /> Acuse Aceptado
+                                </button>
+                                <button onClick={() => registrarAcuse('reparo')} className="bg-amber-600 text-white px-6 py-2 rounded flex items-center gap-2">
+                                    <XCircle size={18} /> Acuse con Reparos
+                                </button>
+                                <button onClick={() => registrarAcuse('rechazado')} className="bg-rose-700 text-white px-6 py-2 rounded flex items-center gap-2">
+                                    <XCircle size={18} /> Acuse Rechazado
                                 </button>
                             </>
+                        )}
+
+                        {estadoActual !== 'Anulada' && (
+                            <button onClick={anular} className="bg-red-600 text-white px-6 py-2 rounded flex items-center gap-2">
+                                <Ban size={18} /> Anular
+                            </button>
                         )}
                     </div>
 
