@@ -2,38 +2,32 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\DetalleDte;
 use App\Models\DocumentoDte;
-use App\Models\FirmaDte;
-use App\Models\TipoDte;
-use App\Models\HistorialEstadoDte;
-use Barryvdh\DomPDF\Facade\Pdf;
-use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
-use Illuminate\Http\Request;
+use App\Models\User;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Gate;
-use Illuminate\Support\Facades\Mail;
-use Illuminate\Support\Str;
 use Inertia\Inertia;
 
 class DashboardController extends Controller
 {
     public function index()
     {
-        $dtes = DocumentoDte::with(['tipoDte', 'user', 'firma', 'historial.user'])
-            ->where('user_id', Auth::id())
-            ->orderBy('created_at', 'desc')
-            ->get();
+        $user = Auth::user();
+        $canViewGlobal = $user?->can('gestionar-usuarios') ?? false;
 
-        // Estadísticas para dashboard
+        $baseQuery = DocumentoDte::query();
+        if (!$canViewGlobal) {
+            $baseQuery->where('user_id', Auth::id());
+        }
+
         $stats = [
-            'total_dtes' => DocumentoDte::count(),
-            'monto_total' => DocumentoDte::sum('monto_total'),
-            'firmados' => DocumentoDte::whereHas('firma')->count(),
-            'usuarios' => \App\Models\User::count(),
+            'total_dtes' => (clone $baseQuery)->count(),
+            'monto_total' => (clone $baseQuery)->sum('monto_total'),
+            'firmados' => (clone $baseQuery)->whereHas('firma')->count(),
+            'usuarios' => $canViewGlobal ? User::count() : 1,
         ];
 
-        $ultimosDtes = DocumentoDte::with('tipoDte')
+        $ultimosDtes = (clone $baseQuery)
+            ->with(['tipoDte', 'historial'])
             ->orderBy('created_at', 'desc')
             ->take(5)
             ->get()

@@ -217,6 +217,7 @@ class DteController extends Controller
     public function show(DocumentoDte $dte)
     {
         $this->authorize('ver-dtes');
+        $this->asegurarPropiedadDte($dte);
 
         $dte->load([
             'region',
@@ -242,6 +243,7 @@ class DteController extends Controller
     public function firmar(Request $request, DocumentoDte $dte)
     {
         $this->authorize('firmar-dte');
+        $this->asegurarPropiedadDte($dte);
 
         $request->validate([
             'tipo_firma' => 'required|in:texto,canvas',
@@ -273,6 +275,7 @@ class DteController extends Controller
     public function enviar(DocumentoDte $dte)
     {
         $this->authorize('enviar-dte');
+        $this->asegurarPropiedadDte($dte);
 
         if (!$dte->firma) {
             return redirect()->route('dtes.show', $dte->id)->with('error', 'Debes firmar el DTE antes de enviarlo al SII.');
@@ -322,6 +325,7 @@ class DteController extends Controller
     public function enviarReceptor(DocumentoDte $dte)
     {
         $this->authorize('enviar-dte');
+        $this->asegurarPropiedadDte($dte);
 
         $estadoActual = $this->estadoActual($dte);
         if ($estadoActual !== 'Aceptada SII') {
@@ -361,6 +365,7 @@ class DteController extends Controller
     public function registrarAcuseReceptor(Request $request, DocumentoDte $dte)
     {
         $this->authorize('enviar-dte');
+        $this->asegurarPropiedadDte($dte);
 
         $validated = $request->validate([
             'respuesta' => 'required|in:aceptado,rechazado,reparo',
@@ -406,6 +411,7 @@ class DteController extends Controller
     public function anular(Request $request, DocumentoDte $dte)
     {
         $this->authorize('anular-dte');
+        $this->asegurarPropiedadDte($dte);
 
         $request->validate(['comentario' => 'required|string']);
 
@@ -422,6 +428,7 @@ class DteController extends Controller
     public function descargarPdf(DocumentoDte $dte)
     {
         $this->authorize('ver-dtes');
+        $this->asegurarPropiedadDte($dte);
 
         $dte->load(['tipoDte', 'detalles', 'firma', 'user', 'region', 'comuna']);
         $this->asegurarTimbreElectronico($dte);
@@ -434,6 +441,7 @@ class DteController extends Controller
     public function descargarXml(DocumentoDte $dte)
     {
         $this->authorize('ver-dtes');
+        $this->asegurarPropiedadDte($dte);
 
         $dte->load(['tipoDte', 'detalles', 'firma', 'user', 'region', 'comuna']);
         $this->asegurarTimbreElectronico($dte);
@@ -605,6 +613,12 @@ class DteController extends Controller
         return 'data:image/svg+xml;base64,' . base64_encode(implode('', $svg));
     }
 
+    private function asegurarPropiedadDte(DocumentoDte $dte): void
+    {
+        if ((int) $dte->user_id !== (int) Auth::id()) {
+            abort(403, 'No autorizado para operar este DTE.');
+        }
+    }
     private function estadoActual(DocumentoDte $dte): string
     {
         return HistorialEstadoDte::query()
@@ -651,5 +665,75 @@ class DteController extends Controller
         ]);
 
         return $pdf->download('reporte-general-dtes-' . now()->format('Ymd-His') . '.pdf');
+    }
+    public function exportExcel(Request $request)
+    {
+        $this->authorize('ver-reportes');
+
+        $query = DocumentoDte::with(['tipoDte', 'user', 'historial']);
+
+        if (!(Auth::user()?->can('gestionar-usuarios') ?? false)) {
+            $query->where('user_id', Auth::id());
+        }
+
+        if ($request->filled('estado')) {
+            $query->whereHas('historial', function ($q) use ($request) {
+                $q->where('estado_nuevo', $request->estado);
+            });
+        }
+
+        if ($request->filled('desde') && $request->filled('hasta')) {
+            $query->whereBetween('fecha_emision', [$request->desde, $request->hasta]);
+        }
+
+        $dtes = $query->orderBy('fecha_emision', 'desc')->get();
+
+        $headers = [
+            'Folio',
+            'Tipo DTE',
+            'Fecha Emision',
+            'Emisor',
+            'RUT Receptor',
+            'Razon Social Receptor',
+            'Monto Neto',
+            'IVA',
+            'Monto Total',
+            'Estado Actual',
+            'Estado SII',
+            'Estado Receptor',
+            'Track ID',
+        ];
+
+        $filename = 'reporte-dtes-' . now()->format('Ymd-His') . '.csv';
+
+        return response()->streamDownload(function () use ($dtes, $headers) {
+            $output = fopen('php://output', 'w');
+            fwrite($output, chr(0xEF) . chr(0xBB) . chr(0xBF));
+            fputcsv($output, $headers, ';');
+
+            foreach ($dtes as $dte) {
+                $estadoActual = $dte->historial->sortBy('created_at')->last()?->estado_nuevo ?? 'Borrador';
+
+                fputcsv($output, [
+                    $dte->folio,
+                    $dte->tipoDte?->nombre,
+                    optional($dte->fecha_emision)->format('Y-m-d'),
+                    $dte->razon_social_emisor,
+                    $dte->rut_receptor,
+                    $dte->razon_social_receptor,
+                    number_format((float) $dte->monto_neto, 2, '.', ''),
+                    number_format((float) $dte->iva, 2, '.', ''),
+                    number_format((float) $dte->monto_total, 2, '.', ''),
+                    $estadoActual,
+                    $dte->estado_sii,
+                    $dte->estado_receptor,
+                    $dte->track_id,
+                ], ';');
+            }
+
+            fclose($output);
+        }, $filename, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+        ]);
     }
 }
