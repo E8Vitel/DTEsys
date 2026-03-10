@@ -30,6 +30,28 @@ class DocumentoDte extends Model
         'timbre',
         'xml_generado',
         'pdf_path',
+        'track_id',
+        'estado_sii',
+        'codigo_respuesta_sii',
+        'mensaje_respuesta_sii',
+        'fecha_envio_sii',
+        'fecha_respuesta_sii',
+        'fecha_envio_receptor',
+        'estado_receptor',
+        'fecha_respuesta_receptor',
+        'observacion_receptor',
+        'transporte_patente',
+        'transporte_rut_chofer',
+        'transporte_nombre_chofer',
+        'direccion_destino',
+    ];
+
+    protected $casts = [
+        'fecha_emision' => 'date',
+        'fecha_envio_sii' => 'datetime',
+        'fecha_respuesta_sii' => 'datetime',
+        'fecha_envio_receptor' => 'datetime',
+        'fecha_respuesta_receptor' => 'datetime',
     ];
 
     public function tipoDte()
