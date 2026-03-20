@@ -21,7 +21,7 @@ export default forwardRef(function TextInput(
             {...props}
             type={type}
             className={
-                'rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 ' +
+                'rounded-2xl border border-amber-300 bg-white px-4 py-3 text-amber-800 shadow-sm placeholder:text-amber-300 focus:border-amber-500 focus:ring-amber-300 ' +
                 className
             }
             ref={localRef}

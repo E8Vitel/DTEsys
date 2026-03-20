@@ -81,7 +81,7 @@
                 </tr>
                 <tr>
                     <td style="width: 50%; padding-right: 8px; padding-top: 4px;">
-                        Firmado por: {{ $dte->firma?->user?->name ?? 'Usuario desconocido' }}
+                        Firmado por: {{ $dte->firma?->user?->name ?? 'Sin firma' }}
                     </td>
                     <td style="width: 50%; padding-left: 8px; padding-top: 4px; text-align: center;">
                         &nbsp;

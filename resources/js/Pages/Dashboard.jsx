@@ -1,117 +1,242 @@
 import React from 'react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import useAuthorization from '@/Hooks/useAuthorization';
 import { Head, Link } from '@inertiajs/react';
-import { FileText, Users, DollarSign, Plus, BarChart3 } from 'lucide-react';
+import { FileText, Users, DollarSign, Plus, BarChart3, ArrowRight } from 'lucide-react';
+
+const metricCards = (stats) => [
+    {
+        label: 'DTEs emitidos',
+        value: stats.total_dtes,
+        icon: FileText,
+    },
+    {
+        label: 'Monto total',
+        value: `$${Number(stats.monto_total).toLocaleString('es-CL')}`,
+        icon: DollarSign,
+    },
+    {
+        label: 'Documentos firmados',
+        value: stats.firmados,
+        icon: BarChart3,
+    },
+    {
+        label: 'Usuarios activos',
+        value: stats.usuarios,
+        icon: Users,
+    },
+];
 
 export default function Dashboard({ stats, ultimosDtes }) {
+    const { can } = useAuthorization();
+    const canViewDtes = can('ver-dtes');
+    const canCreateDtes = can('crear-dte');
+    const canViewReports = can('ver-reportes');
+
     return (
         <AuthenticatedLayout
             header={
-                <div className="flex justify-between items-center">
-                    <h2 className="text-xl font-semibold leading-tight text-gray-800">
-                        Dashboard DTEsys
-                    </h2>
-                    <Link
-                        href={route('dtes.create')}
-                        className="bg-indigo-600 text-white px-4 py-2 rounded flex items-center gap-2 hover:bg-indigo-700"
-                    >
-                        <Plus size={18} /> Nuevo DTE
-                    </Link>
+                <div className="grid gap-6 lg:grid-cols-[1.25fr_0.75fr] lg:items-end">
+                    <div>
+                        <div className="inline-flex rounded-full border border-amber-200 bg-amber-50 px-4 py-2 text-xs font-black uppercase tracking-[0.3em] text-amber-500">
+                            Panel ejecutivo
+                        </div>
+                        <h2 className="mt-5 max-w-3xl text-4xl font-black leading-tight text-amber-700">
+                            Visualiza el estado operativo de tu flujo DTE en una sola lectura.
+                        </h2>
+                        <p className="mt-4 max-w-2xl text-base leading-7 text-amber-600">
+                            Sigue la emision, el volumen documental y la actividad del sistema con
+                            una interfaz pensada para priorizar informacion clave.
+                        </p>
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+                        {canCreateDtes && (
+                            <Link
+                                href={route('dtes.create')}
+                                className="flex items-center justify-between rounded-[1.75rem] bg-gradient-to-r from-amber-500 to-yellow-400 px-6 py-5 text-white shadow-[0_24px_55px_rgba(245,158,11,0.22)] transition hover:brightness-105"
+                            >
+                                <div>
+                                    <p className="text-xs font-black uppercase tracking-[0.25em] text-white/80">
+                                        Accion principal
+                                    </p>
+                                    <p className="mt-2 text-xl font-black">Crear nuevo DTE</p>
+                                </div>
+                                <Plus size={22} />
+                            </Link>
+                        )}
+
+                        {canViewDtes && (
+                            <Link
+                                href={route('dtes.index')}
+                                className="flex items-center justify-between rounded-[1.75rem] border border-amber-200 bg-white px-6 py-5 text-amber-700 shadow-[0_18px_45px_rgba(245,158,11,0.12)] transition hover:bg-amber-50"
+                            >
+                                <div>
+                                    <p className="text-xs font-black uppercase tracking-[0.25em] text-amber-400">
+                                        Consulta
+                                    </p>
+                                    <p className="mt-2 text-xl font-black">Ver DTEs</p>
+                                </div>
+                                <ArrowRight size={22} />
+                            </Link>
+                        )}
+                    </div>
                 </div>
             }
         >
             <Head title="Dashboard" />
 
-            <div className="py-12">
-                <div className="mx-auto max-w-7xl sm:px-6 lg:px-8">
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-                        <div className="bg-white p-6 rounded-xl shadow">
-                            <div className="flex items-center gap-4">
-                                <FileText className="w-10 h-10 text-blue-600" />
-                                <div>
-                                    <p className="text-sm text-gray-600">DTEs Emitidos</p>
-                                    <p className="text-3xl font-bold">{stats.total_dtes}</p>
+            <div className="py-8">
+                <div className="mx-auto max-w-7xl space-y-8 px-4 sm:px-6 lg:px-8">
+                    <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+                        {metricCards(stats).map(({ label, value, icon: Icon }) => (
+                            <article
+                                key={label}
+                                className="overflow-hidden rounded-[1.9rem] border border-amber-200 bg-white shadow-[0_22px_55px_rgba(245,158,11,0.12)]"
+                            >
+                                <div className="h-2 bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500" />
+                                <div className="p-6">
+                                    <div className="flex items-start justify-between gap-4">
+                                        <div>
+                                            <p className="text-xs font-black uppercase tracking-[0.22em] text-amber-400">
+                                                {label}
+                                            </p>
+                                            <p className="mt-4 text-3xl font-black leading-none text-amber-700">
+                                                {value}
+                                            </p>
+                                        </div>
+                                        <div className="rounded-2xl bg-amber-100 p-4 text-amber-600">
+                                            <Icon size={24} />
+                                        </div>
+                                    </div>
                                 </div>
-                            </div>
-                        </div>
+                            </article>
+                        ))}
+                    </section>
 
-                        <div className="bg-white p-6 rounded-xl shadow">
-                            <div className="flex items-center gap-4">
-                                <DollarSign className="w-10 h-10 text-green-600" />
+                    <section className="grid gap-8 xl:grid-cols-[1.3fr_0.7fr]">
+                        {canViewDtes && (
+                            <div className="overflow-hidden rounded-[2rem] border border-amber-200 bg-white shadow-[0_24px_60px_rgba(245,158,11,0.12)]">
+                            <div className="flex items-center justify-between border-b border-amber-200 px-6 py-5">
                                 <div>
-                                    <p className="text-sm text-gray-600">Monto Total</p>
-                                    <p className="text-3xl font-bold">${Number(stats.monto_total).toLocaleString('es-CL')}</p>
+                                    <p className="text-xs font-black uppercase tracking-[0.28em] text-amber-400">
+                                        Actividad reciente
+                                    </p>
+                                    <h3 className="mt-2 text-2xl font-black text-amber-700">
+                                        Ultimos 5 DTEs
+                                    </h3>
                                 </div>
+                                {canViewDtes && (
+                                    <Link
+                                        href={route('dtes.index')}
+                                        className="rounded-full bg-amber-50 px-4 py-2 text-sm font-black uppercase tracking-[0.16em] text-amber-600 hover:bg-amber-100"
+                                    >
+                                        Ver todos
+                                    </Link>
+                                )}
                             </div>
-                        </div>
 
-                        <div className="bg-white p-6 rounded-xl shadow">
-                            <div className="flex items-center gap-4">
-                                <BarChart3 className="w-10 h-10 text-purple-600" />
-                                <div>
-                                    <p className="text-sm text-gray-600">Firmados</p>
-                                    <p className="text-3xl font-bold">{stats.firmados}</p>
-                                </div>
+                            <div className="p-6">
+                                {ultimosDtes.length === 0 ? (
+                                    <div className="rounded-[1.6rem] border border-dashed border-amber-300 bg-amber-50 px-6 py-12 text-center text-base font-bold text-amber-600">
+                                        Aun no hay documentos registrados.
+                                    </div>
+                                ) : (
+                                    <div className="overflow-x-auto">
+                                        <table className="min-w-full divide-y divide-amber-200">
+                                            <thead>
+                                                <tr>
+                                                    <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-[0.2em] text-amber-400">
+                                                        Folio
+                                                    </th>
+                                                    <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-[0.2em] text-amber-400">
+                                                        Tipo
+                                                    </th>
+                                                    <th className="px-4 py-3 text-right text-xs font-black uppercase tracking-[0.2em] text-amber-400">
+                                                        Total
+                                                    </th>
+                                                    <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-[0.2em] text-amber-400">
+                                                        Estado
+                                                    </th>
+                                                    <th className="px-4 py-3 text-right text-xs font-black uppercase tracking-[0.2em] text-amber-400">
+                                                        Detalle
+                                                    </th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-amber-100">
+                                                {ultimosDtes.map((dte) => (
+                                                    <tr key={dte.id} className="hover:bg-amber-50">
+                                                        <td className="whitespace-nowrap px-4 py-4 text-sm font-black text-amber-700">
+                                                            {dte.folio}
+                                                        </td>
+                                                        <td className="whitespace-nowrap px-4 py-4 text-sm font-bold text-amber-600">
+                                                            {dte.tipo_dte?.nombre ?? 'Sin tipo'}
+                                                        </td>
+                                                        <td className="whitespace-nowrap px-4 py-4 text-right text-sm font-bold text-amber-700">
+                                                            ${Number(dte.monto_total).toLocaleString('es-CL')}
+                                                        </td>
+                                                        <td className="whitespace-nowrap px-4 py-4">
+                                                            <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-black uppercase tracking-[0.12em] text-amber-700">
+                                                                {dte.estado_actual}
+                                                            </span>
+                                                        </td>
+                                                        <td className="whitespace-nowrap px-4 py-4 text-right">
+                                                            {canViewDtes && (
+                                                                <Link
+                                                                    href={route('dtes.show', dte.id)}
+                                                                    className="text-sm font-black uppercase tracking-[0.12em] text-amber-600 hover:text-amber-800"
+                                                                >
+                                                                    Ver
+                                                                </Link>
+                                                            )}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
                             </div>
-                        </div>
-
-                        <div className="bg-white p-6 rounded-xl shadow">
-                            <div className="flex items-center gap-4">
-                                <Users className="w-10 h-10 text-orange-600" />
-                                <div>
-                                    <p className="text-sm text-gray-600">Usuarios</p>
-                                    <p className="text-3xl font-bold">{stats.usuarios}</p>
-                                </div>
                             </div>
-                        </div>
-                    </div>
-
-                    <div className="bg-white shadow sm:rounded-lg p-6 mb-8">
-                        <h3 className="text-lg font-medium mb-4">Últimos 5 DTEs</h3>
-                        {ultimosDtes.length === 0 ? (
-                            <p className="text-gray-500">Aún no hay documentos.</p>
-                        ) : (
-                            <table className="min-w-full divide-y divide-gray-200">
-                                <thead>
-                                    <tr>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Folio</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tipo</th>
-                                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Total</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Estado</th>
-                                        <th className="px-6 py-3 text-right"></th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-200">
-                                    {ultimosDtes.map(dte => (
-                                        <tr key={dte.id}>
-                                            <td className="px-6 py-4 whitespace-nowrap">{dte.folio}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap">{dte.tipo_dte?.nombre ?? 'Sin tipo'}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-right">${Number(dte.monto_total).toLocaleString('es-CL')}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <span className={`px-2 py-1 rounded text-xs ${
-                                                    dte.estado_actual === 'Firmada' ? 'bg-yellow-100 text-yellow-800' :
-                                                    dte.estado_actual === 'Enviada' ? 'bg-green-100 text-green-800' :
-                                                    dte.estado_actual === 'Anulada' ? 'bg-red-100 text-red-800' :
-                                                    'bg-gray-100 text-gray-800'
-                                                }`}>
-                                                    {dte.estado_actual}
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-right">
-                                                <Link href={route('dtes.show', dte.id)} className="text-indigo-600 hover:text-indigo-900">Ver</Link>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
                         )}
-                    </div>
 
-                    <div className="flex justify-end">
-                        <Link href={route('reportes.general')} className="bg-purple-600 text-white px-6 py-3 rounded hover:bg-purple-700">
-                            Ver Reporte General (PDF)
-                        </Link>
-                    </div>
+                        <div className="space-y-6">
+                            <div className="rounded-[2rem] border border-amber-200 bg-gradient-to-br from-amber-500 via-yellow-400 to-amber-500 p-7 text-white shadow-[0_28px_70px_rgba(245,158,11,0.22)]">
+                                <p className="text-xs font-black uppercase tracking-[0.28em] text-white/80">
+                                    Resumen del sistema
+                                </p>
+                                <h3 className="mt-3 text-3xl font-black leading-tight">
+                                    {stats.total_dtes} documentos procesados.
+                                </h3>
+                                <p className="mt-4 text-sm leading-7 text-white/88">
+                                    Manten visibilidad sobre volumen, firmas y trazabilidad desde el
+                                    panel principal.
+                                </p>
+                            </div>
+
+                            {canViewReports && (
+                                <div className="rounded-[2rem] border border-amber-200 bg-white p-7 shadow-[0_20px_50px_rgba(245,158,11,0.1)]">
+                                    <p className="text-xs font-black uppercase tracking-[0.28em] text-amber-400">
+                                        Reportes
+                                    </p>
+                                    <h3 className="mt-3 text-2xl font-black text-amber-700">
+                                        Exporta un reporte general del sistema.
+                                    </h3>
+                                    <p className="mt-4 text-sm leading-7 text-amber-600">
+                                        Genera una salida consolidada en PDF para seguimiento operativo o
+                                        revision administrativa.
+                                    </p>
+                                    <Link
+                                        href={route('reportes.general')}
+                                        className="mt-6 inline-flex items-center gap-2 rounded-2xl border border-amber-300 bg-amber-50 px-5 py-3 text-sm font-black uppercase tracking-[0.14em] text-amber-700 transition hover:bg-white"
+                                    >
+                                        Abrir reporte
+                                        <ArrowRight size={16} />
+                                    </Link>
+                                </div>
+                            )}
+                        </div>
+                    </section>
                 </div>
             </div>
         </AuthenticatedLayout>

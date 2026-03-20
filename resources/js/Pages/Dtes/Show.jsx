@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { useAppDialog } from '@/Components/AppDialog';
+import useAuthorization from '@/Hooks/useAuthorization';
 import { Head, router } from '@inertiajs/react';
 import SignatureCanvas from 'react-signature-canvas';
 import { Ban, CheckCircle2, Download, Send, XCircle } from 'lucide-react';
 
 export default function Show({ dte, tipoDte, detallesDte }) {
     const dialog = useAppDialog();
+    const { can } = useAuthorization();
     const [firmaTipo, setFirmaTipo] = useState('texto');
     const [firmaTexto, setFirmaTexto] = useState('');
     const sigCanvas = React.useRef(null);
@@ -166,9 +168,14 @@ export default function Show({ dte, tipoDte, detallesDte }) {
     const estadoActual = dte.historial?.length > 0 ? dte.historial[dte.historial.length - 1].estado_nuevo : 'Borrador';
     const yaFirmado = !!dte.firma;
 
-    const puedeEnviarSii = estadoActual === 'Firmada' || estadoActual === 'Rechazada SII';
-    const puedeEnviarReceptor = estadoActual === 'Aceptada SII';
-    const puedeRegistrarAcuse = estadoActual === 'Enviada Receptor';
+    const canFirmarDte = can('firmar-dte');
+    const canEnviarDte = can('enviar-dte');
+    const canAnularDte = can('anular-dte');
+    const canViewDtes = can('ver-dtes');
+
+    const puedeEnviarSii = canEnviarDte && (estadoActual === 'Firmada' || estadoActual === 'Rechazada SII');
+    const puedeEnviarReceptor = canEnviarDte && estadoActual === 'Aceptada SII';
+    const puedeRegistrarAcuse = canEnviarDte && estadoActual === 'Enviada Receptor';
 
     return (
         <AuthenticatedLayout header={<h2 className="text-xl font-semibold">Detalle DTE: {dte.folio}</h2>}>
@@ -235,7 +242,7 @@ export default function Show({ dte, tipoDte, detallesDte }) {
                         </table>
                     </div>
 
-                    {!yaFirmado && estadoActual === 'Borrador' && (
+                    {!yaFirmado && canFirmarDte && estadoActual === 'Borrador' && (
                         <div className="bg-white shadow sm:rounded-lg p-6">
                             <h3 className="text-lg font-medium mb-4">Firma Digital Simulada</h3>
                             <div className="flex gap-4 mb-4">
@@ -303,12 +310,16 @@ export default function Show({ dte, tipoDte, detallesDte }) {
                     )}
 
                     <div className="flex flex-wrap gap-4">
-                        <a href={route('dtes.download-xml', dte.id)} className="bg-slate-700 text-white px-6 py-2 rounded flex items-center gap-2">
-                            <Download size={18} /> Descargar XML
-                        </a>
-                        <a href={route('dtes.download-pdf', dte.id)} className="bg-slate-900 text-white px-6 py-2 rounded flex items-center gap-2">
-                            <Download size={18} /> Descargar PDF
-                        </a>
+                        {canViewDtes && (
+                            <a href={route('dtes.download-xml', dte.id)} className="bg-slate-700 text-white px-6 py-2 rounded flex items-center gap-2">
+                                <Download size={18} /> Descargar XML
+                            </a>
+                        )}
+                        {canViewDtes && (
+                            <a href={route('dtes.download-pdf', dte.id)} className="bg-slate-900 text-white px-6 py-2 rounded flex items-center gap-2">
+                                <Download size={18} /> Descargar PDF
+                            </a>
+                        )}
 
                         {puedeEnviarSii && (
                             <button onClick={enviarSii} className="bg-blue-600 text-white px-6 py-2 rounded flex items-center gap-2">
@@ -336,7 +347,7 @@ export default function Show({ dte, tipoDte, detallesDte }) {
                             </>
                         )}
 
-                        {estadoActual !== 'Anulada' && (
+                        {canAnularDte && estadoActual !== 'Anulada' && (
                             <button onClick={anular} className="bg-red-600 text-white px-6 py-2 rounded flex items-center gap-2">
                                 <Ban size={18} /> Anular
                             </button>
