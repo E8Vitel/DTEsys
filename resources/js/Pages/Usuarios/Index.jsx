@@ -4,6 +4,7 @@ import { useAppDialog } from '@/Components/AppDialog';
 import { Head, router } from '@inertiajs/react';
 
 export default function Index({ usuarios, roles, permisos }) {
+    // Dialogos reutilizables para confirmar operaciones sensibles.
     const dialog = useAppDialog();
 
     const handleAsignarRol = async (userId, role) => {
@@ -58,6 +59,7 @@ export default function Index({ usuarios, roles, permisos }) {
         }
     };
 
+    // Renderiza roles como etiquetas compactas.
     const renderChips = (items, bgClass, textClass, emptyText) => {
         if (!items || items.length === 0) {
             return <span className="text-xs font-bold text-amber-400">{emptyText}</span>;
@@ -73,6 +75,7 @@ export default function Index({ usuarios, roles, permisos }) {
         ));
     };
 
+    // Muestra el conjunto efectivo de permisos de cada usuario.
     const renderPermissionList = (items) => {
         if (!items || items.length === 0) {
             return <span className="text-xs font-bold text-amber-400">Sin permisos asignados</span>;

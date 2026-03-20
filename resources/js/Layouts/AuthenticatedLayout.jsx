@@ -7,12 +7,14 @@ import { Link, usePage } from '@inertiajs/react';
 import { useState } from 'react';
 
 export default function AuthenticatedLayout({ header, children }) {
+    // Obtiene datos del usuario autenticado desde las props compartidas por Inertia.
     const { auth } = usePage().props;
     const user = auth.user;
     const { can } = useAuthorization();
     const canManageUsers = can('gestionar-usuarios');
     const canViewDtes = can('ver-dtes');
 
+    // Controla el menu responsive en pantallas pequenas.
     const [showingNavigationDropdown, setShowingNavigationDropdown] = useState(false);
 
     return (
@@ -55,6 +57,7 @@ export default function AuthenticatedLayout({ header, children }) {
                                 Dashboard
                             </NavLink>
 
+                            {/* El menu se adapta segun permisos del usuario. */}
                             {canViewDtes && (
                                 <NavLink href={route('dtes.index')} active={route().current('dtes.*')}>
                                     DTEs

@@ -7,6 +7,7 @@ import SignatureCanvas from 'react-signature-canvas';
 import { Ban, CheckCircle2, Download, Send, XCircle } from 'lucide-react';
 
 export default function Show({ dte, tipoDte, detallesDte }) {
+    // Dialog centralizado para confirmaciones, alertas y prompts.
     const dialog = useAppDialog();
     const { can } = useAuthorization();
     const [firmaTipo, setFirmaTipo] = useState('texto');
@@ -14,10 +15,12 @@ export default function Show({ dte, tipoDte, detallesDte }) {
     const sigCanvas = React.useRef(null);
     const [procFirma, setProcFirma] = useState(false);
 
+    // Alterna entre firma por texto y firma dibujada.
     const cambiarFirmaTipo = (tipo) => {
         setFirmaTipo(tipo);
     };
 
+    // Convierte una firma escrita en texto a una imagen para mantener una sola vista final.
     const generarFirmaTextoPng = (texto) => {
         const contenido = (texto || '').trim();
         if (!contenido) {
@@ -44,6 +47,7 @@ export default function Show({ dte, tipoDte, detallesDte }) {
         return canvas.toDataURL('image/png');
     };
 
+    // Valida y envia la firma simulada al backend.
     const firmar = async (e) => {
         e.preventDefault();
 
@@ -97,6 +101,7 @@ export default function Show({ dte, tipoDte, detallesDte }) {
         });
     };
 
+    // Solicita confirmacion antes de iniciar el envio simulado al SII.
     const enviarSii = async () => {
         const confirmado = await dialog.confirm({
             type: 'info',
@@ -110,6 +115,7 @@ export default function Show({ dte, tipoDte, detallesDte }) {
         }
     };
 
+    // Solicita confirmacion antes de enviar XML y PDF al receptor.
     const enviarReceptor = async () => {
         const confirmado = await dialog.confirm({
             type: 'info',
@@ -123,6 +129,7 @@ export default function Show({ dte, tipoDte, detallesDte }) {
         }
     };
 
+    // Registra la respuesta del receptor; para rechazo o reparo exige comentario.
     const registrarAcuse = async (respuesta) => {
         let comentario = '';
 
@@ -149,6 +156,7 @@ export default function Show({ dte, tipoDte, detallesDte }) {
         });
     };
 
+    // La anulacion siempre pide motivo para dejar trazabilidad en historial.
     const anular = async () => {
         const comentario = await dialog.prompt({
             type: 'warning',
@@ -165,6 +173,7 @@ export default function Show({ dte, tipoDte, detallesDte }) {
         }
     };
 
+    // Estado calculado a partir del ultimo elemento del historial recibido.
     const estadoActual = dte.historial?.length > 0 ? dte.historial[dte.historial.length - 1].estado_nuevo : 'Borrador';
     const yaFirmado = !!dte.firma;
 
@@ -173,6 +182,7 @@ export default function Show({ dte, tipoDte, detallesDte }) {
     const canAnularDte = can('anular-dte');
     const canViewDtes = can('ver-dtes');
 
+    // Estas banderas encapsulan reglas de negocio de la interfaz.
     const puedeEnviarSii = canEnviarDte && (estadoActual === 'Firmada' || estadoActual === 'Rechazada SII');
     const puedeEnviarReceptor = canEnviarDte && estadoActual === 'Aceptada SII';
     const puedeRegistrarAcuse = canEnviarDte && estadoActual === 'Enviada Receptor';

@@ -18,18 +18,22 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
+// Controlador principal del flujo DTE.
+// Centraliza consulta, creacion, firma, envio, descargas y reportes.
 class DteController extends Controller
 {
     use AuthorizesRequests;
 
     public function index(Request $request)
     {
+        // Filtros visibles en la pantalla de listado.
         $filters = [
             'search' => $request->string('search')->toString(),
             'tipo' => $request->string('tipo')->toString(),
             'estado' => $request->string('estado')->toString(),
         ];
 
+        // Cada usuario ve solo sus propios documentos.
         $query = DocumentoDte::with([
             'tipoDte',
             'historial' => function ($historial) {
@@ -37,6 +41,7 @@ class DteController extends Controller
             },
         ])->where('user_id', Auth::id());
 
+        // Busqueda libre por folio, razon social o RUT del receptor.
         if (!empty($filters['search'])) {
             $query->where(function ($searchQuery) use ($filters) {
                 $searchQuery
@@ -46,10 +51,12 @@ class DteController extends Controller
             });
         }
 
+        // Filtro por tipo de documento.
         if (!empty($filters['tipo'])) {
             $query->where('tipo_dte_id', $filters['tipo']);
         }
 
+        // El estado actual se obtiene desde el ultimo registro del historial.
         $dtes = $query
             ->orderBy('created_at', 'desc')
             ->get()
@@ -58,6 +65,7 @@ class DteController extends Controller
                 return $dte;
             });
 
+        // El filtro por estado se hace sobre la coleccion ya enriquecida con estado_actual.
         if (!empty($filters['estado'])) {
             $dtes = $dtes
                 ->filter(fn ($dte) => $dte->estado_actual === $filters['estado'])
@@ -85,6 +93,7 @@ class DteController extends Controller
 
     public function create()
     {
+        // Entrega catalogos base para poblar el formulario de emision.
         return Inertia::render('Dtes/Create', [
             'tipos' => TipoDte::all(),
             'regiones' => Region::query()->orderBy('nombre')->get(['id', 'codigo', 'nombre']),
@@ -94,6 +103,7 @@ class DteController extends Controller
 
     public function store(Request $request)
     {
+        // Valida datos tributarios, receptor e items del documento.
         $validated = $request->validate([
             'tipo_dte_id' => 'required|exists:tipos_dte,id',
             'rut_receptor' => 'required|string|max:12',
@@ -132,6 +142,7 @@ class DteController extends Controller
         $user = Auth::user();
         $tipo = TipoDte::findOrFail($validated['tipo_dte_id']);
 
+        // Regla especial: desde el 1 de mayo de 2026 la Guia de Despacho exige datos de transporte.
         $fechaAnexo25 = now()->startOfDay()->greaterThanOrEqualTo(\Carbon\Carbon::create(2026, 5, 1, 0, 0, 0));
         if ($tipo->codigo === '52' && $fechaAnexo25) {
             $errores = [];
@@ -157,6 +168,7 @@ class DteController extends Controller
             }
         }
 
+        // Recalcula montos en backend para no confiar en calculos del cliente.
         $montoNeto = 0;
         foreach ($validated['detalles'] as $det) {
             $montoNeto += $det['cantidad'] * $det['precio_unitario'];
@@ -164,6 +176,7 @@ class DteController extends Controller
         $iva = $montoNeto * 0.19;
         $total = $montoNeto + $iva;
 
+        // Se crea el encabezado del documento con estados iniciales y folio interno.
         $dte = DocumentoDte::create([
             'tipo_dte_id' => $tipo->id,
             'user_id' => $user->id,
@@ -189,6 +202,7 @@ class DteController extends Controller
             'transporte_nombre_chofer' => $validated['transporte_nombre_chofer'] ?? null,
         ]);
 
+        // Se inserta cada linea del documento.
         foreach ($validated['detalles'] as $det) {
             DetalleDte::create([
                 'documento_dte_id' => $dte->id,
@@ -199,10 +213,12 @@ class DteController extends Controller
             ]);
         }
 
+        // Luego de tener el documento persistido, se genera el timbre usando sus datos finales.
         $dte->update([
             'timbre' => $this->generarTimbreElectronico($dte),
         ]);
 
+        // Primer evento del flujo: el documento nace como Borrador.
         HistorialEstadoDte::create([
             'documento_dte_id' => $dte->id,
             'estado_anterior' => 'Creacion',
@@ -216,6 +232,7 @@ class DteController extends Controller
 
     public function show(DocumentoDte $dte)
     {
+        // Valida permisos y propiedad antes de mostrar el documento.
         $this->authorize('ver-dtes');
         $this->asegurarPropiedadDte($dte);
 
@@ -228,6 +245,7 @@ class DteController extends Controller
             },
         ]);
 
+        // Si el timbre no existe o es invalido, se regenera al vuelo.
         $this->asegurarTimbreElectronico($dte);
 
         $tipoDte = TipoDte::where('id', $dte->tipo_dte_id)->first();
@@ -242,6 +260,7 @@ class DteController extends Controller
 
     public function firmar(Request $request, DocumentoDte $dte)
     {
+        // Solo el propietario autorizado puede firmar un documento en borrador.
         $this->authorize('firmar-dte');
         $this->asegurarPropiedadDte($dte);
 
@@ -251,6 +270,7 @@ class DteController extends Controller
             'firma_canvas' => 'nullable|string|required_if:tipo_firma,canvas',
         ]);
 
+        // Se evita aplicar mas de una firma al mismo documento.
         if ($dte->firma) {
             return response()->json(['error' => 'Ya firmado'], 422);
         }
@@ -259,6 +279,7 @@ class DteController extends Controller
             return response()->json(['error' => 'Solo se puede firmar un DTE en estado Borrador'], 422);
         }
 
+        // Se persiste la firma simulada en texto o imagen base64.
         FirmaDte::create([
             'documento_dte_id' => $dte->id,
             'tipo_firma' => $request->tipo_firma,
@@ -274,6 +295,7 @@ class DteController extends Controller
 
     public function enviar(DocumentoDte $dte)
     {
+        // Simula el envio al SII y guarda la respuesta estructural.
         $this->authorize('enviar-dte');
         $this->asegurarPropiedadDte($dte);
 
@@ -289,6 +311,7 @@ class DteController extends Controller
         $dte->loadMissing(['tipoDte', 'detalles', 'firma', 'user', 'region', 'comuna']);
         $this->asegurarTimbreElectronico($dte);
 
+        // El XML se renderiza desde una vista para poder reutilizarlo despues.
         $xml = view('xml.dte', ['dte' => $dte])->render();
 
         $dte->update([
@@ -303,6 +326,7 @@ class DteController extends Controller
 
         $this->cambiarEstado($dte, 'Enviada SII', 'Envio simulado a SII');
 
+        // Luego del envio se ejecuta una validacion local que simula al SII.
         $resultadoSii = $this->simularValidacionSii($dte);
         $dte->update([
             'estado_sii' => $resultadoSii['aceptado'] ? 'Aceptado' : 'Rechazado',
@@ -324,6 +348,7 @@ class DteController extends Controller
 
     public function enviarReceptor(DocumentoDte $dte)
     {
+        // Simula la entrega del XML y PDF al receptor una vez aceptado por SII.
         $this->authorize('enviar-dte');
         $this->asegurarPropiedadDte($dte);
 
@@ -334,11 +359,13 @@ class DteController extends Controller
 
         $dte->loadMissing(['tipoDte', 'detalles', 'firma', 'user', 'region', 'comuna']);
 
+        // Reutiliza el XML ya generado o lo reconstruye si aun no existe.
         $xml = $dte->xml_generado ?: view('xml.dte', ['dte' => $dte])->render();
         if (!$dte->xml_generado) {
             $dte->update(['xml_generado' => $xml]);
         }
 
+        // El PDF se genera y se guarda para adjuntarlo al correo simulado.
         $pdf = Pdf::loadView('pdf.dte', ['dte' => $dte]);
         $pdfPath = storage_path('app/public/dtes/dte-' . $dte->id . '.pdf');
         if (!file_exists(storage_path('app/public/dtes'))) {
@@ -351,6 +378,7 @@ class DteController extends Controller
             'fecha_envio_receptor' => now(),
         ]);
 
+        // El envio real no se integra aqui: se usa un correo de simulacion con adjuntos.
         Mail::raw('Simulacion: DTE #' . $dte->folio . ' aceptado por SII y enviado a receptor.', function ($message) use ($dte, $xml, $pdfPath) {
             $message->to('receptor@test.cl')->subject('DTE Simulado ' . $dte->folio);
             $message->attachData($xml, 'DTE-' . $dte->folio . '.xml', ['mime' => 'application/xml']);
@@ -364,6 +392,7 @@ class DteController extends Controller
 
     public function registrarAcuseReceptor(Request $request, DocumentoDte $dte)
     {
+        // Permite registrar la respuesta comercial del receptor.
         $this->authorize('enviar-dte');
         $this->asegurarPropiedadDte($dte);
 
@@ -381,6 +410,7 @@ class DteController extends Controller
             return redirect()->route('dtes.show', $dte->id)->with('error', 'No puedes registrar acuse en un DTE anulado.');
         }
 
+        // Traduce la respuesta corta del formulario al estado formal del flujo.
         $mapa = [
             'aceptado' => ['estado' => 'Acuse Aceptado', 'etiqueta' => 'Aceptado'],
             'rechazado' => ['estado' => 'Acuse Rechazado', 'etiqueta' => 'Rechazado'],
@@ -410,6 +440,7 @@ class DteController extends Controller
 
     public function anular(Request $request, DocumentoDte $dte)
     {
+        // Registra una anulacion con comentario obligatorio para trazabilidad.
         $this->authorize('anular-dte');
         $this->asegurarPropiedadDte($dte);
 
@@ -427,6 +458,7 @@ class DteController extends Controller
 
     public function descargarPdf(DocumentoDte $dte)
     {
+        // Descarga una representacion PDF del documento.
         $this->authorize('ver-dtes');
         $this->asegurarPropiedadDte($dte);
 
@@ -440,6 +472,7 @@ class DteController extends Controller
 
     public function descargarXml(DocumentoDte $dte)
     {
+        // Descarga el XML estructurado del DTE.
         $this->authorize('ver-dtes');
         $this->asegurarPropiedadDte($dte);
 
@@ -460,6 +493,7 @@ class DteController extends Controller
 
     private function asegurarTimbreElectronico(DocumentoDte $dte): void
     {
+        // Si el timbre guardado no es una imagen embebida valida, se genera nuevamente.
         if (!is_string($dte->timbre) || !str_starts_with($dte->timbre, 'data:image/')) {
             $dte->timbre = $this->generarTimbreElectronico($dte);
             $dte->save();
@@ -468,6 +502,7 @@ class DteController extends Controller
 
     private function simularValidacionSii(DocumentoDte $dte): array
     {
+        // Reglas minimas de validacion para simular aceptacion o rechazo del SII.
         $errores = [];
 
         if (!preg_match('/^[0-9kK.\-]+$/', (string) $dte->rut_emisor)) {
@@ -533,6 +568,7 @@ class DteController extends Controller
 
     private function generarTimbreElectronico(DocumentoDte $dte): string
     {
+        // Genera un SVG pseudoaleatorio y deterministico a partir de datos del documento.
         $seedSource = implode('|', [
             (string) $dte->id,
             (string) $dte->folio,
@@ -615,12 +651,14 @@ class DteController extends Controller
 
     private function asegurarPropiedadDte(DocumentoDte $dte): void
     {
+        // Protege contra acceso a documentos de otros usuarios.
         if ((int) $dte->user_id !== (int) Auth::id()) {
             abort(403, 'No autorizado para operar este DTE.');
         }
     }
     private function estadoActual(DocumentoDte $dte): string
     {
+        // El estado actual siempre corresponde al ultimo movimiento del historial.
         return HistorialEstadoDte::query()
             ->where('documento_dte_id', $dte->id)
             ->latest('id')
@@ -629,6 +667,7 @@ class DteController extends Controller
 
     private function cambiarEstado(DocumentoDte $dte, string $nuevoEstado, ?string $comentario = null): void
     {
+        // Inserta una nueva transicion de estado sin sobrescribir el historial previo.
         HistorialEstadoDte::create([
             'documento_dte_id' => $dte->id,
             'estado_anterior' => $this->estadoActual($dte),
@@ -640,6 +679,7 @@ class DteController extends Controller
 
     public function reporteGeneral(Request $request)
     {
+        // Genera un PDF consolidado para seguimiento operativo.
         $this->authorize('ver-reportes');
 
         $query = DocumentoDte::with(['tipoDte', 'user', 'firma', 'historial']);
@@ -668,6 +708,7 @@ class DteController extends Controller
     }
     public function exportExcel(Request $request)
     {
+        // Exporta un CSV UTF-8 compatible con Excel y otras herramientas.
         $this->authorize('ver-reportes');
 
         $query = DocumentoDte::with(['tipoDte', 'user', 'historial']);

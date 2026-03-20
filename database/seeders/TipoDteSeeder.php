@@ -9,6 +9,7 @@ class TipoDteSeeder extends Seeder
 {
     public function run(): void
     {
+        // Tipos iniciales soportados por el sistema.
         TipoDte::insert([
             ['codigo' => '33', 'nombre' => 'Factura Electronica'],
             ['codigo' => '39', 'nombre' => 'Boleta Electronica'],
