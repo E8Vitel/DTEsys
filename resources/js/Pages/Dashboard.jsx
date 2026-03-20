@@ -4,6 +4,7 @@ import useAuthorization from '@/Hooks/useAuthorization';
 import { Head, Link } from '@inertiajs/react';
 import { FileText, Users, DollarSign, Plus, BarChart3, ArrowRight } from 'lucide-react';
 
+// Convierte las estadisticas del backend en tarjetas presentables para el dashboard.
 const metricCards = (stats) => [
     {
         label: 'DTEs emitidos',
@@ -28,6 +29,7 @@ const metricCards = (stats) => [
 ];
 
 export default function Dashboard({ stats, ultimosDtes }) {
+    // Se consultan permisos para mostrar solo acciones validas para el perfil actual.
     const { can } = useAuthorization();
     const canViewDtes = can('ver-dtes');
     const canCreateDtes = can('crear-dte');
@@ -66,6 +68,7 @@ export default function Dashboard({ stats, ultimosDtes }) {
                             </Link>
                         )}
 
+                        {/* Tabla resumida con los ultimos documentos visibles. */}
                         {canViewDtes && (
                             <Link
                                 href={route('dtes.index')}

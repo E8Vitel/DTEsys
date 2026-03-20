@@ -4,6 +4,7 @@ import { Head, useForm } from '@inertiajs/react';
 import { Plus, Trash2 } from 'lucide-react';
 
 export default function Create({ tipos, regiones, comunas }) {
+    // Estado completo del formulario de emision.
     const { data, setData, post, processing, errors } = useForm({
         tipo_dte_id: '',
         rut_receptor: '',
@@ -19,12 +20,14 @@ export default function Create({ tipos, regiones, comunas }) {
         detalles: [{ cantidad: 1, descripcion: '', precio_unitario: 0 }],
     });
 
+    // Permite identificar rapidamente si el formulario corresponde a una Guia.
     const tipoSeleccionado = useMemo(() => {
         return tipos.find((tipo) => String(tipo.id) === String(data.tipo_dte_id));
     }, [tipos, data.tipo_dte_id]);
 
     const esGuiaDespacho = tipoSeleccionado?.codigo === '52';
 
+    // Formateador visual para montos mostrados en pantalla.
     const formatoCLP = (valor) =>
         new Intl.NumberFormat('es-CL', {
             style: 'currency',
@@ -37,15 +40,18 @@ export default function Create({ tipos, regiones, comunas }) {
         return Number.isFinite(number) ? number : 0;
     };
 
+    // Agrega una nueva linea al detalle del documento.
     const addDetalle = () => {
         setData('detalles', [...data.detalles, { cantidad: 1, descripcion: '', precio_unitario: 0 }]);
     };
 
+    // Quita una linea del detalle, manteniendo siempre al menos una.
     const removeDetalle = (index) => {
         if (data.detalles.length === 1) return;
         setData('detalles', data.detalles.filter((_, i) => i !== index));
     };
 
+    // Normaliza y actualiza los datos de cada item.
     const handleDetalleChange = (index, field, value) => {
         const newDetalles = [...data.detalles];
         const parsedValue = field === 'descripcion' ? value : value === '' ? '' : Math.max(0, toNumber(value));
@@ -53,6 +59,7 @@ export default function Create({ tipos, regiones, comunas }) {
         setData('detalles', newDetalles);
     };
 
+    // Recalcula neto, IVA y total cada vez que cambia el detalle.
     const resumen = useMemo(() => {
         const neto = data.detalles.reduce((acum, det) => {
             return acum + (toNumber(det.cantidad) * toNumber(det.precio_unitario));
@@ -64,11 +71,13 @@ export default function Create({ tipos, regiones, comunas }) {
         return { neto, iva, total };
     }, [data.detalles]);
 
+    // Filtra comunas segun la region elegida por el usuario.
     const comunasFiltradas = useMemo(() => {
         if (!data.region_id) return [];
         return comunas.filter((comuna) => String(comuna.region_id) === String(data.region_id));
     }, [comunas, data.region_id]);
 
+    // Si cambia la region, invalida la comuna seleccionada cuando ya no corresponde.
     useEffect(() => {
         if (!data.comuna_id) return;
         const comunaVigente = comunasFiltradas.some((comuna) => String(comuna.id) === String(data.comuna_id));
@@ -77,6 +86,7 @@ export default function Create({ tipos, regiones, comunas }) {
         }
     }, [data.comuna_id, comunasFiltradas, setData]);
 
+    // Envia el formulario al backend para crear el DTE.
     const submit = (e) => {
         e.preventDefault();
         post(route('dtes.store'));

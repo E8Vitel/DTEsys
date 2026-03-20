@@ -5,12 +5,15 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
+// Modelo central del sistema: representa un DTE completo con sus datos y relaciones.
 class DocumentoDte extends Model
 {
     use HasFactory;
 
+    // Nombre real de la tabla en base de datos.
     protected $table = 'documentos_dte';
 
+    // Atributos que pueden cargarse de forma masiva.
     protected $fillable = [
         'tipo_dte_id',
         'user_id',
@@ -46,6 +49,7 @@ class DocumentoDte extends Model
         'direccion_destino',
     ];
 
+    // Conversion automatica de fechas para trabajar con Carbon en Laravel.
     protected $casts = [
         'fecha_emision' => 'date',
         'fecha_envio_sii' => 'datetime',
@@ -56,36 +60,43 @@ class DocumentoDte extends Model
 
     public function tipoDte()
     {
+        // Tipo de documento tributario asociado.
         return $this->belongsTo(TipoDte::class);
     }
 
     public function user()
     {
+        // Usuario propietario o creador del documento.
         return $this->belongsTo(User::class);
     }
 
     public function region()
     {
+        // Region de la direccion del receptor.
         return $this->belongsTo(Region::class);
     }
 
     public function comuna()
     {
+        // Comuna de la direccion del receptor.
         return $this->belongsTo(Comuna::class);
     }
 
     public function detalles()
     {
+        // Lineas o items del documento.
         return $this->hasMany(DetalleDte::class);
     }
 
     public function historial()
     {
+        // Trazabilidad completa de cambios de estado.
         return $this->hasMany(HistorialEstadoDte::class);
     }
 
     public function firma()
     {
+        // Firma unica aplicada al documento.
         return $this->hasOne(FirmaDte::class);
     }
 }

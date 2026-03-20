@@ -2,10 +2,10 @@
 
 namespace Database\Seeders;
 
-use App\Models\User;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
+// Ejecuta la carga inicial completa del sistema.
 class DatabaseSeeder extends Seeder
 {
     use WithoutModelEvents;
@@ -17,11 +17,12 @@ class DatabaseSeeder extends Seeder
     {
         // User::factory(10)->create();
 
+        // El orden asegura que existan roles y usuarios antes de crear documentos.
         $this->call([
-            PermissionSeeder::class,   // ya lo tienes
-            UserSeeder::class,         // nuevo – crea usuarios ANTES
+            PermissionSeeder::class,
+            UserSeeder::class,
             TipoDteSeeder::class,
-            DocumentoDteSeeder::class, // ahora tendrá usuarios
+            DocumentoDteSeeder::class,
         ]);
     }
 }

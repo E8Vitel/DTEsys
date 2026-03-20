@@ -13,10 +13,12 @@ class DocumentoDteSeeder extends Seeder
 {
     public function run(): void
     {
+        // Usa al primer usuario como propietario de los datos de demostracion.
         $admin = User::first();
         $tipos = TipoDte::all();
 
         foreach ($tipos as $tipo) {
+            // Se genera un ejemplo por cada tipo de DTE cargado en catalogo.
             $dte = DocumentoDte::create([
                 'tipo_dte_id' => $tipo->id,
                 'user_id' => $admin->id,
@@ -32,7 +34,7 @@ class DocumentoDteSeeder extends Seeder
                 'timbre' => 'TED-SIMULADO-' . rand(100000,999999),
             ]);
 
-            // Detalle de ejemplo
+            // Item simple para que el documento tenga monto y contenido.
             DetalleDte::create([
                 'documento_dte_id' => $dte->id,
                 'cantidad' => 1,
@@ -41,7 +43,7 @@ class DocumentoDteSeeder extends Seeder
                 'subtotal' => 100000,
             ]);
 
-            // Historial inicial
+            // Historial minimo para probar la trazabilidad.
             HistorialEstadoDte::create([
                 'documento_dte_id' => $dte->id,
                 'estado_anterior' => 'Borrador',

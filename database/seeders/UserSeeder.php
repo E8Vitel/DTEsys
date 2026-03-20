@@ -8,13 +8,13 @@ use Illuminate\Support\Facades\Hash;
 use Spatie\Permission\Models\Role;
 
 /**
- * Seeder para crear usuarios de prueba con roles asignados
+ * Crea usuarios base para pruebas funcionales del sistema.
  */
 class UserSeeder extends Seeder
 {
     public function run(): void
     {
-        // Admin principal
+        // Usuario con acceso administrativo total.
         $admin = User::create([
             'name' => 'Administrador Principal',
             'email' => 'admin@dtesys.cl',
@@ -26,7 +26,7 @@ class UserSeeder extends Seeder
         $adminRole = Role::where('name', 'admin')->first();
         $admin->assignRole($adminRole);
 
-        // Contador de prueba
+        // Usuario orientado a operacion y control documental.
         $contador = User::create([
             'name' => 'Contador Ejemplo',
             'email' => 'contador@dtesys.cl',
@@ -38,7 +38,7 @@ class UserSeeder extends Seeder
         $contadorRole = Role::where('name', 'contador')->first();
         $contador->assignRole($contadorRole);
 
-        // Emisor básico
+        // Usuario basico de emision.
         User::create([
             'name' => 'Emisor Test',
             'email' => 'emisor@dtesys.cl',

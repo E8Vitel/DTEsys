@@ -5,9 +5,11 @@ import { Head, Link, router } from '@inertiajs/react';
 import { FileSearch, Plus, RotateCcw } from 'lucide-react';
 
 export default function Index({ dtes, tipos, estados, filters }) {
+    // El permiso de creacion controla si se muestra la accion principal.
     const { can } = useAuthorization();
     const canCreateDtes = can('crear-dte');
 
+    // Estado local del formulario de filtros para no recargar en cada tecla.
     const [formFilters, setFormFilters] = useState({
         search: filters?.search ?? '',
         tipo: filters?.tipo ?? '',
@@ -22,6 +24,7 @@ export default function Index({ dtes, tipos, estados, filters }) {
         }));
     };
 
+    // Ejecuta la busqueda enviando filtros por GET.
     const handleSearch = (event) => {
         event.preventDefault();
 
@@ -31,6 +34,7 @@ export default function Index({ dtes, tipos, estados, filters }) {
         });
     };
 
+    // Restablece todos los filtros a su estado inicial.
     const clearFilters = () => {
         const cleanFilters = {
             search: '',
