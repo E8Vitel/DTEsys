@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Mail\DteReceptorMail;
 use App\Models\Comuna;
 use App\Models\DetalleDte;
 use App\Models\DocumentoDte;
@@ -15,6 +16,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
@@ -82,9 +84,9 @@ class DteController extends Controller
                 'Aceptada SII',
                 'Rechazada SII',
                 'Enviada Receptor',
-                'Acuse Aceptado',
-                'Acuse Rechazado',
-                'Acuse con Reparos',
+                'Documento Aceptado',
+                'Documento Rechazado',
+                'Documento con Reparos',
                 'Anulada',
             ],
             'filters' => $filters,
@@ -106,7 +108,11 @@ class DteController extends Controller
         // Valida datos tributarios, receptor e items del documento.
         $validated = $request->validate([
             'tipo_dte_id' => 'required|exists:tipos_dte,id',
-            'rut_receptor' => 'required|string|max:12',
+            'rut_receptor' => ['required', 'string', 'max:12', function ($attribute, $value, $fail) {
+                if (!$this->esRutChilenoValido($value)) {
+                    $fail('El RUT receptor no es valido.');
+                }
+            }],
             'razon_social_receptor' => 'required|string|max:255',
             'giro_receptor' => 'nullable|string|max:255',
             'direccion_receptor' => 'nullable|string|max:255',
@@ -135,7 +141,11 @@ class DteController extends Controller
             'detalles.*.precio_unitario' => 'required|numeric|min:0',
             'direccion_destino' => 'nullable|string|max:255',
             'transporte_patente' => 'nullable|string|max:12',
-            'transporte_rut_chofer' => 'nullable|string|max:12',
+            'transporte_rut_chofer' => ['nullable', 'string', 'max:12', function ($attribute, $value, $fail) {
+                if (!blank($value) && !$this->esRutChilenoValido($value)) {
+                    $fail('El RUT del chofer no es valido.');
+                }
+            }],
             'transporte_nombre_chofer' => 'nullable|string|max:255',
         ]);
 
@@ -180,11 +190,11 @@ class DteController extends Controller
         $dte = DocumentoDte::create([
             'tipo_dte_id' => $tipo->id,
             'user_id' => $user->id,
-            'folio' => 'F' . Str::random(8) . '-' . time(),
+            'folio' => 'TMP-' . (string) Str::uuid(),
             'fecha_emision' => now(),
-            'rut_emisor' => $user->rut ?? '12345678-9',
+            'rut_emisor' => $this->normalizarRutChileno($user->rut ?? '12345678-9'),
             'razon_social_emisor' => 'DTEsys SPA',
-            'rut_receptor' => $validated['rut_receptor'],
+            'rut_receptor' => $this->normalizarRutChileno($validated['rut_receptor']),
             'razon_social_receptor' => $validated['razon_social_receptor'],
             'giro_receptor' => $validated['giro_receptor'] ?? null,
             'direccion_receptor' => $validated['direccion_receptor'] ?? null,
@@ -195,11 +205,17 @@ class DteController extends Controller
             'monto_total' => $total,
             'timbre' => 'TED-SIM-' . Str::random(12),
             'estado_sii' => 'No enviado',
-            'estado_receptor' => 'Sin acuse',
+            'estado_receptor' => 'Sin acusar',
             'direccion_destino' => $validated['direccion_destino'] ?? null,
             'transporte_patente' => $validated['transporte_patente'] ?? null,
-            'transporte_rut_chofer' => $validated['transporte_rut_chofer'] ?? null,
+            'transporte_rut_chofer' => !empty($validated['transporte_rut_chofer'])
+                ? $this->normalizarRutChileno($validated['transporte_rut_chofer'])
+                : null,
             'transporte_nombre_chofer' => $validated['transporte_nombre_chofer'] ?? null,
+        ]);
+
+        $dte->update([
+            'folio' => $this->generarFolioInterno($dte),
         ]);
 
         // Se inserta cada linea del documento.
@@ -378,12 +394,23 @@ class DteController extends Controller
             'fecha_envio_receptor' => now(),
         ]);
 
-        // El envio real no se integra aqui: se usa un correo de simulacion con adjuntos.
-        Mail::raw('Simulacion: DTE #' . $dte->folio . ' aceptado por SII y enviado a receptor.', function ($message) use ($dte, $xml, $pdfPath) {
-            $message->to('receptor@test.cl')->subject('DTE Simulado ' . $dte->folio);
-            $message->attachData($xml, 'DTE-' . $dte->folio . '.xml', ['mime' => 'application/xml']);
-            $message->attach($pdfPath, ['as' => 'DTE-' . $dte->folio . '.pdf', 'mime' => 'application/pdf']);
-        });
+        $correoReceptor = config('mail.recipient_fallback.address', 'receptor@test.cl');
+        $urlsAcuse = [
+            'aceptado' => URL::temporarySignedRoute('dtes.acuse-receptor.email', now()->addDays(7), [
+                'dte' => $dte->id,
+                'respuesta' => 'aceptado',
+            ]),
+            'reparo' => URL::temporarySignedRoute('dtes.acuse-receptor.email', now()->addDays(7), [
+                'dte' => $dte->id,
+                'respuesta' => 'reparo',
+            ]),
+            'rechazado' => URL::temporarySignedRoute('dtes.acuse-receptor.email', now()->addDays(7), [
+                'dte' => $dte->id,
+                'respuesta' => 'rechazado',
+            ]),
+        ];
+
+        Mail::to($correoReceptor)->send(new DteReceptorMail($dte, $xml, $pdfPath, $urlsAcuse));
 
         $this->cambiarEstado($dte, 'Enviada Receptor', 'Envio XML/PDF al receptor (simulado)');
 
@@ -401,41 +428,53 @@ class DteController extends Controller
             'comentario' => 'nullable|string|max:1000',
         ]);
 
-        if (empty($dte->fecha_envio_receptor)) {
-            return redirect()->route('dtes.show', $dte->id)->with('error', 'Primero debes enviar el DTE al receptor.');
-        }
+        $comentario = trim((string) ($validated['comentario'] ?? ''));
+        $this->registrarAcuseEnDocumento($dte, $validated['respuesta'], $comentario, Auth::id());
 
-        $estadoActual = $this->estadoActual($dte);
-        if ($estadoActual === 'Anulada') {
-            return redirect()->route('dtes.show', $dte->id)->with('error', 'No puedes registrar acuse en un DTE anulado.');
-        }
+        return redirect()->route('dtes.show', $dte->id)->with('success', 'Acuse receptor registrado.');
+    }
 
-        // Traduce la respuesta corta del formulario al estado formal del flujo.
-        $mapa = [
-            'aceptado' => ['estado' => 'Acuse Aceptado', 'etiqueta' => 'Aceptado'],
-            'rechazado' => ['estado' => 'Acuse Rechazado', 'etiqueta' => 'Rechazado'],
-            'reparo' => ['estado' => 'Acuse con Reparos', 'etiqueta' => 'Con reparos'],
-        ];
+    public function responderAcuseDesdeCorreo(Request $request, DocumentoDte $dte, string $respuesta)
+    {
+        abort_unless(in_array($respuesta, ['aceptado', 'reparo', 'rechazado'], true), 404);
 
-        $seleccion = $mapa[$validated['respuesta']];
+        if ($respuesta === 'aceptado') {
+            $this->registrarAcuseEnDocumento($dte, $respuesta, '', $dte->user_id);
 
-        if ($validated['respuesta'] !== 'aceptado' && empty(trim((string) ($validated['comentario'] ?? '')))) {
-            throw ValidationException::withMessages([
-                'comentario' => 'Debes registrar comentario cuando el acuse es rechazado o con reparos.',
+            return view('acuse.resultado', [
+                'titulo' => 'Acuse registrado',
+                'mensaje' => 'El documento ' . $dte->folio . ' fue acusado como recibido sin reparos.',
+                'estado' => 'Aceptado',
             ]);
         }
 
-        $comentario = trim((string) ($validated['comentario'] ?? ''));
+        return view('acuse.formulario', [
+            'dte' => $dte,
+            'respuesta' => $respuesta,
+            'titulo' => $respuesta === 'reparo' ? 'Acusar con reparos' : 'Rechazar documento',
+            'accion' => URL::signedRoute('dtes.acuse-receptor.email.store', [
+                'dte' => $dte->id,
+                'respuesta' => $respuesta,
+            ]),
+        ]);
+    }
 
-        $dte->update([
-            'estado_receptor' => $seleccion['etiqueta'],
-            'fecha_respuesta_receptor' => now(),
-            'observacion_receptor' => $comentario !== '' ? $comentario : null,
+    public function guardarAcuseDesdeCorreo(Request $request, DocumentoDte $dte, string $respuesta)
+    {
+        abort_unless(in_array($respuesta, ['reparo', 'rechazado'], true), 404);
+
+        $validated = $request->validate([
+            'comentario' => 'required|string|max:1000',
         ]);
 
-        $this->cambiarEstado($dte, $seleccion['estado'], $comentario !== '' ? $comentario : 'Acuse receptor registrado');
+        $comentario = trim((string) $validated['comentario']);
+        $this->registrarAcuseEnDocumento($dte, $respuesta, $comentario, $dte->user_id);
 
-        return redirect()->route('dtes.show', $dte->id)->with('success', 'Acuse receptor registrado.');
+        return view('acuse.resultado', [
+            'titulo' => 'Respuesta registrada',
+            'mensaje' => 'La respuesta para el documento ' . $dte->folio . ' fue registrada correctamente.',
+            'estado' => $respuesta === 'reparo' ? 'Con reparos' : 'Rechazado',
+        ]);
     }
 
     public function anular(Request $request, DocumentoDte $dte)
@@ -505,11 +544,11 @@ class DteController extends Controller
         // Reglas minimas de validacion para simular aceptacion o rechazo del SII.
         $errores = [];
 
-        if (!preg_match('/^[0-9kK.\-]+$/', (string) $dte->rut_emisor)) {
+        if (!$this->esRutChilenoValido((string) $dte->rut_emisor)) {
             $errores[] = 'RUT emisor invalido';
         }
 
-        if (!preg_match('/^[0-9kK.\-]+$/', (string) $dte->rut_receptor)) {
+        if (!$this->esRutChilenoValido((string) $dte->rut_receptor)) {
             $errores[] = 'RUT receptor invalido';
         }
 
@@ -544,6 +583,8 @@ class DteController extends Controller
 
             if (empty($dte->transporte_rut_chofer)) {
                 $errores[] = 'RUT chofer obligatorio para Guia';
+            } elseif (!$this->esRutChilenoValido((string) $dte->transporte_rut_chofer)) {
+                $errores[] = 'RUT chofer invalido';
             }
 
             if (empty($dte->transporte_nombre_chofer)) {
@@ -656,6 +697,54 @@ class DteController extends Controller
             abort(403, 'No autorizado para operar este DTE.');
         }
     }
+
+    private function generarFolioInterno(DocumentoDte $dte): string
+    {
+        return 'Folio-' . $dte->id;
+    }
+
+    private function normalizarRutChileno(?string $rut): string
+    {
+        $rutLimpio = preg_replace('/[^0-9kK]/', '', (string) $rut) ?? '';
+        $cuerpo = substr($rutLimpio, 0, -1);
+        $dv = strtoupper(substr($rutLimpio, -1));
+
+        return ltrim($cuerpo, '0') . '-' . $dv;
+    }
+
+    private function esRutChilenoValido(?string $rut): bool
+    {
+        $rutLimpio = preg_replace('/[^0-9kK]/', '', (string) $rut) ?? '';
+
+        if (strlen($rutLimpio) < 2) {
+            return false;
+        }
+
+        $cuerpo = substr($rutLimpio, 0, -1);
+        $dvIngresado = strtoupper(substr($rutLimpio, -1));
+
+        if ($cuerpo === '' || !ctype_digit($cuerpo)) {
+            return false;
+        }
+
+        $suma = 0;
+        $multiplicador = 2;
+
+        foreach (array_reverse(str_split($cuerpo)) as $digito) {
+            $suma += ((int) $digito) * $multiplicador;
+            $multiplicador = $multiplicador === 7 ? 2 : $multiplicador + 1;
+        }
+
+        $resto = 11 - ($suma % 11);
+        $dvEsperado = match ($resto) {
+            11 => '0',
+            10 => 'K',
+            default => (string) $resto,
+        };
+
+        return $dvIngresado === $dvEsperado;
+    }
+
     private function estadoActual(DocumentoDte $dte): string
     {
         // El estado actual siempre corresponde al ultimo movimiento del historial.
@@ -665,14 +754,57 @@ class DteController extends Controller
             ->value('estado_nuevo') ?? 'Borrador';
     }
 
-    private function cambiarEstado(DocumentoDte $dte, string $nuevoEstado, ?string $comentario = null): void
+    private function registrarAcuseEnDocumento(DocumentoDte $dte, string $respuesta, string $comentario = '', ?int $actorId = null): void
+    {
+        if (empty($dte->fecha_envio_receptor)) {
+            throw ValidationException::withMessages([
+                'respuesta' => 'Primero debes enviar el DTE al receptor.',
+            ]);
+        }
+
+        $estadoActual = $this->estadoActual($dte);
+        if ($estadoActual === 'Anulada') {
+            throw ValidationException::withMessages([
+                'respuesta' => 'No puedes registrar acuso en un DTE anulado.',
+            ]);
+        }
+
+        $mapa = [
+            'aceptado' => ['estado' => 'Documento Aceptado', 'etiqueta' => 'Aceptado'],
+            'rechazado' => ['estado' => 'Documento Rechazado', 'etiqueta' => 'Rechazado'],
+            'reparo' => ['estado' => 'Documento con Reparos', 'etiqueta' => 'Con reparos'],
+        ];
+
+        $seleccion = $mapa[$respuesta] ?? null;
+        if (!$seleccion) {
+            throw ValidationException::withMessages([
+                'respuesta' => 'La respuesta del receptor no es valida.',
+            ]);
+        }
+
+        if ($respuesta !== 'aceptado' && $comentario === '') {
+            throw ValidationException::withMessages([
+                'comentario' => 'Debes registrar comentario cuando el acuse es rechazado o con reparos.',
+            ]);
+        }
+
+        $dte->update([
+            'estado_receptor' => $seleccion['etiqueta'],
+            'fecha_respuesta_receptor' => now(),
+            'observacion_receptor' => $comentario !== '' ? $comentario : null,
+        ]);
+
+        $this->cambiarEstado($dte, $seleccion['estado'], $comentario !== '' ? $comentario : 'Acuse receptor registrado', $actorId);
+    }
+
+    private function cambiarEstado(DocumentoDte $dte, string $nuevoEstado, ?string $comentario = null, ?int $actorId = null): void
     {
         // Inserta una nueva transicion de estado sin sobrescribir el historial previo.
         HistorialEstadoDte::create([
             'documento_dte_id' => $dte->id,
             'estado_anterior' => $this->estadoActual($dte),
             'estado_nuevo' => $nuevoEstado,
-            'user_id' => Auth::id(),
+            'user_id' => $actorId ?? Auth::id() ?? $dte->user_id,
             'comentario' => $comentario,
         ]);
     }
