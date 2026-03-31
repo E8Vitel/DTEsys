@@ -63,9 +63,6 @@ Route::middleware('auth')->group(function () {
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
-    // Reportes consolidados del sistema.
-    Route::middleware('can:ver-reportes')->get('/reportes/general', [DteController::class, 'reporteGeneral'])->name('reportes.general');
-    Route::middleware('can:ver-reportes')->get('/reportes/export-excel', [DteController::class, 'exportExcel'])->name('reportes.export-excel');
 });
 
 // Gestion de usuarios, roles y permisos.

@@ -33,7 +33,6 @@ export default function Dashboard({ stats, ultimosDtes }) {
     const { can } = useAuthorization();
     const canViewDtes = can('ver-dtes');
     const canCreateDtes = can('crear-dte');
-    const canViewReports = can('ver-reportes');
 
     return (
         <AuthenticatedLayout
@@ -216,28 +215,6 @@ export default function Dashboard({ stats, ultimosDtes }) {
                                     panel principal.
                                 </p>
                             </div>
-
-                            {canViewReports && (
-                                <div className="rounded-[2rem] border border-amber-200 bg-white p-7 shadow-[0_20px_50px_rgba(245,158,11,0.1)]">
-                                    <p className="text-xs font-black uppercase tracking-[0.28em] text-amber-400">
-                                        Reportes
-                                    </p>
-                                    <h3 className="mt-3 text-2xl font-black text-amber-700">
-                                        Exporta un reporte general del sistema.
-                                    </h3>
-                                    <p className="mt-4 text-sm leading-7 text-amber-600">
-                                        Genera una salida consolidada en PDF para seguimiento operativo o
-                                        revision administrativa.
-                                    </p>
-                                    <Link
-                                        href={route('reportes.general')}
-                                        className="mt-6 inline-flex items-center gap-2 rounded-2xl border border-amber-300 bg-amber-50 px-5 py-3 text-sm font-black uppercase tracking-[0.14em] text-amber-700 transition hover:bg-white"
-                                    >
-                                        Abrir reporte
-                                        <ArrowRight size={16} />
-                                    </Link>
-                                </div>
-                            )}
                         </div>
                     </section>
                 </div>

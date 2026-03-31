@@ -21,7 +21,7 @@ use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
 // Controlador principal del flujo DTE.
-// Centraliza consulta, creacion, firma, envio, descargas y reportes.
+// Centraliza consulta, creacion, firma, envio y descargas.
 class DteController extends Controller
 {
     use AuthorizesRequests;
@@ -809,104 +809,4 @@ class DteController extends Controller
         ]);
     }
 
-    public function reporteGeneral(Request $request)
-    {
-        // Genera un PDF consolidado para seguimiento operativo.
-        $this->authorize('ver-reportes');
-
-        $query = DocumentoDte::with(['tipoDte', 'user', 'firma', 'historial']);
-
-        if ($request->estado) {
-            $query->whereHas('historial', function ($q) use ($request) {
-                $q->where('estado_nuevo', $request->estado);
-            });
-        }
-
-        if ($request->desde && $request->hasta) {
-            $query->whereBetween('fecha_emision', [$request->desde, $request->hasta]);
-        }
-
-        $dtes = $query->orderBy('fecha_emision', 'desc')->get();
-
-        $pdf = Pdf::loadView('pdf.reporte-general', [
-            'dtes' => $dtes,
-            'total_neto' => $dtes->sum('monto_neto'),
-            'total_iva' => $dtes->sum('iva'),
-            'total_general' => $dtes->sum('monto_total'),
-            'fecha_generacion' => now()->format('d/m/Y H:i'),
-        ]);
-
-        return $pdf->download('reporte-general-dtes-' . now()->format('Ymd-His') . '.pdf');
-    }
-    public function exportExcel(Request $request)
-    {
-        // Exporta un CSV UTF-8 compatible con Excel y otras herramientas.
-        $this->authorize('ver-reportes');
-
-        $query = DocumentoDte::with(['tipoDte', 'user', 'historial']);
-
-        if (!(Auth::user()?->can('gestionar-usuarios') ?? false)) {
-            $query->where('user_id', Auth::id());
-        }
-
-        if ($request->filled('estado')) {
-            $query->whereHas('historial', function ($q) use ($request) {
-                $q->where('estado_nuevo', $request->estado);
-            });
-        }
-
-        if ($request->filled('desde') && $request->filled('hasta')) {
-            $query->whereBetween('fecha_emision', [$request->desde, $request->hasta]);
-        }
-
-        $dtes = $query->orderBy('fecha_emision', 'desc')->get();
-
-        $headers = [
-            'Folio',
-            'Tipo DTE',
-            'Fecha Emision',
-            'Emisor',
-            'RUT Receptor',
-            'Razon Social Receptor',
-            'Monto Neto',
-            'IVA',
-            'Monto Total',
-            'Estado Actual',
-            'Estado SII',
-            'Estado Receptor',
-            'Track ID',
-        ];
-
-        $filename = 'reporte-dtes-' . now()->format('Ymd-His') . '.csv';
-
-        return response()->streamDownload(function () use ($dtes, $headers) {
-            $output = fopen('php://output', 'w');
-            fwrite($output, chr(0xEF) . chr(0xBB) . chr(0xBF));
-            fputcsv($output, $headers, ';');
-
-            foreach ($dtes as $dte) {
-                $estadoActual = $dte->historial->sortBy('created_at')->last()?->estado_nuevo ?? 'Borrador';
-
-                fputcsv($output, [
-                    $dte->folio,
-                    $dte->tipoDte?->nombre,
-                    optional($dte->fecha_emision)->format('Y-m-d'),
-                    $dte->razon_social_emisor,
-                    $dte->rut_receptor,
-                    $dte->razon_social_receptor,
-                    number_format((float) $dte->monto_neto, 2, '.', ''),
-                    number_format((float) $dte->iva, 2, '.', ''),
-                    number_format((float) $dte->monto_total, 2, '.', ''),
-                    $estadoActual,
-                    $dte->estado_sii,
-                    $dte->estado_receptor,
-                    $dte->track_id,
-                ], ';');
-            }
-
-            fclose($output);
-        }, $filename, [
-            'Content-Type' => 'text/csv; charset=UTF-8',
-        ]);
-    }
 }
