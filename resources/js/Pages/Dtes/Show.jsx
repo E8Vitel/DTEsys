@@ -222,7 +222,7 @@ export default function Show({ dte, tipoDte, detallesDte }) {
                                     <p><strong>SII:</strong> {dte.estado_sii || 'No enviado'}</p>
                                     <p><strong>Track ID:</strong> {dte.track_id || 'No asignado'}</p>
                                     <p><strong>Respuesta SII:</strong> {dte.codigo_respuesta_sii || '-'} {dte.mensaje_respuesta_sii ? `- ${dte.mensaje_respuesta_sii}` : ''}</p>
-                                    <p><strong>Acuse receptor:</strong> {dte.estado_receptor || 'Sin acuse'}</p>
+                                    <p><strong>Estado receptor:</strong> {dte.estado_receptor || 'Sin acuse'}</p>
                                 </div>
                             </div>
                         </div>
@@ -343,7 +343,7 @@ export default function Show({ dte, tipoDte, detallesDte }) {
                             </button>
                         )}
 
-                        {puedeRegistrarAcuse && (
+                        {/* {puedeRegistrarAcuse && (
                             <>
                                 <button onClick={() => registrarAcuse('aceptado')} className="bg-emerald-600 text-white px-6 py-2 rounded flex items-center gap-2">
                                     <CheckCircle2 size={18} /> Acuse Aceptado
@@ -355,7 +355,7 @@ export default function Show({ dte, tipoDte, detallesDte }) {
                                     <XCircle size={18} /> Acuse Rechazado
                                 </button>
                             </>
-                        )}
+                        )} */}
 
                         {canAnularDte && estadoActual !== 'Anulada' && (
                             <button onClick={anular} className="bg-red-600 text-white px-6 py-2 rounded flex items-center gap-2">

@@ -14,6 +14,12 @@ Route::get('/', function () {
     return redirect()->route('login');
 });
 
+// Respuesta del receptor desde correo firmado, sin autenticacion.
+Route::middleware('signed')->group(function () {
+    Route::get('/acuse-receptor/email/{dte}/{respuesta}', [DteController::class, 'responderAcuseDesdeCorreo'])->name('dtes.acuse-receptor.email');
+    Route::post('/acuse-receptor/email/{dte}/{respuesta}', [DteController::class, 'guardarAcuseDesdeCorreo'])->name('dtes.acuse-receptor.email.store');
+});
+
 // Rutas disponibles para cualquier usuario autenticado.
 Route::middleware('auth')->group(function () {
 
