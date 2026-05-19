@@ -77,8 +77,8 @@ export default function Login({ status, canResetPassword }) {
                         </div>
                     </div>
 
-                    <div className="flex flex-col gap-4 rounded-[1.75rem] border border-amber-200 bg-amber-50 p-5 md:flex-row md:items-center md:justify-between">
-                        <label className="flex items-center">
+                    {/* <div className="flex flex-col gap-4 rounded-[1.75rem] border border-amber-200 bg-amber-50 p-5 md:flex-row md:items-center md:justify-between">
+                        {/* <label className="flex items-center">
                             <Checkbox
                                 name="remember"
                                 checked={data.remember}
@@ -95,7 +95,7 @@ export default function Login({ status, canResetPassword }) {
                                 Recuperar acceso
                             </Link>
                         )}
-                    </div>
+                    </div> */}
 
                     <div className="flex items-center justify-end">
                         <PrimaryButton className="w-full justify-center md:w-auto" disabled={processing}>
