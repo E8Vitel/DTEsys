@@ -1,9 +1,13 @@
 import React, { useEffect, useMemo } from 'react';
+import { useAppDialog } from '@/Components/AppDialog';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, useForm } from '@inertiajs/react';
 import { Plus, Trash2 } from 'lucide-react';
+import { formatRutChileno, isRutChilenoValid, sanitizeRutChileno } from '@/utils/rut';
 
 export default function Create({ tipos, regiones, comunas }) {
+    const dialog = useAppDialog();
+
     // Estado completo del formulario de emision.
     const { data, setData, post, processing, errors } = useForm({
         tipo_dte_id: '',
@@ -26,6 +30,10 @@ export default function Create({ tipos, regiones, comunas }) {
     }, [tipos, data.tipo_dte_id]);
 
     const esGuiaDespacho = tipoSeleccionado?.codigo === '52';
+    const rutReceptorIngresado = sanitizeRutChileno(data.rut_receptor).length > 0;
+    const rutReceptorValido = isRutChilenoValid(data.rut_receptor);
+    const rutChoferIngresado = sanitizeRutChileno(data.transporte_rut_chofer).length > 0;
+    const rutChoferValido = isRutChilenoValid(data.transporte_rut_chofer);
 
     // Formateador visual para montos mostrados en pantalla.
     const formatoCLP = (valor) =>
@@ -59,6 +67,10 @@ export default function Create({ tipos, regiones, comunas }) {
         setData('detalles', newDetalles);
     };
 
+    const handleRutChange = (field) => (event) => {
+        setData(field, formatRutChileno(event.target.value));
+    };
+
     // Recalcula neto, IVA y total cada vez que cambia el detalle.
     const resumen = useMemo(() => {
         const neto = data.detalles.reduce((acum, det) => {
@@ -69,6 +81,13 @@ export default function Create({ tipos, regiones, comunas }) {
         const total = neto + iva;
 
         return { neto, iva, total };
+    }, [data.detalles]);
+
+    const tieneItemsValidos = useMemo(() => {
+        return data.detalles.some((det) => {
+            return String(det.descripcion ?? '').trim() !== ''
+                && toNumber(det.cantidad) > 0;
+        });
     }, [data.detalles]);
 
     // Filtra comunas segun la region elegida por el usuario.
@@ -87,8 +106,18 @@ export default function Create({ tipos, regiones, comunas }) {
     }, [data.comuna_id, comunasFiltradas, setData]);
 
     // Envia el formulario al backend para crear el DTE.
-    const submit = (e) => {
+    const submit = async (e) => {
         e.preventDefault();
+
+        if (!tieneItemsValidos) {
+            await dialog.alert({
+                type: 'error',
+                title: 'No se pudo crear el DTE',
+                message: 'Revise el formulario.',
+            });
+            return;
+        }
+
         post(route('dtes.store'));
     };
 
@@ -152,10 +181,15 @@ export default function Create({ tipos, regiones, comunas }) {
                                             <input
                                                 type="text"
                                                 value={data.rut_receptor}
-                                                onChange={(e) => setData('rut_receptor', e.target.value)}
-                                                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm"
+                                                onChange={handleRutChange('rut_receptor')}
+                                                className={`mt-1 block w-full rounded-md shadow-sm ${rutReceptorIngresado && !rutReceptorValido ? 'border-red-300 focus:border-red-500 focus:ring-red-300' : 'border-gray-300'}`}
                                                 placeholder="76.123.456-7"
+                                                inputMode="text"
+                                                maxLength={12}
                                             />
+                                            {rutReceptorIngresado && !rutReceptorValido && !errors.rut_receptor && (
+                                                <p className="mt-1 text-sm text-red-600">Ingresa un RUT chileno valido.</p>
+                                            )}
                                             {errors.rut_receptor && <p className="mt-1 text-sm text-red-600">{errors.rut_receptor}</p>}
                                         </div>
 
@@ -193,7 +227,7 @@ export default function Create({ tipos, regiones, comunas }) {
                                                 <option value="">Seleccione region...</option>
                                                 {regiones.map((region) => (
                                                     <option key={region.id} value={region.id}>
-                                                        {region.codigo} - {region.nombre}
+                                                        {region.nombre}
                                                     </option>
                                                 ))}
                                             </select>
@@ -265,10 +299,15 @@ export default function Create({ tipos, regiones, comunas }) {
                                                 <input
                                                     type="text"
                                                     value={data.transporte_rut_chofer}
-                                                    onChange={(e) => setData('transporte_rut_chofer', e.target.value)}
-                                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm"
+                                                    onChange={handleRutChange('transporte_rut_chofer')}
+                                                    className={`mt-1 block w-full rounded-md shadow-sm ${rutChoferIngresado && !rutChoferValido ? 'border-red-300 focus:border-red-500 focus:ring-red-300' : 'border-gray-300'}`}
                                                     placeholder="12.345.678-9"
+                                                    inputMode="text"
+                                                    maxLength={12}
                                                 />
+                                                {rutChoferIngresado && !rutChoferValido && !errors.transporte_rut_chofer && (
+                                                    <p className="mt-1 text-sm text-red-600">Ingresa un RUT chileno valido.</p>
+                                                )}
                                                 {errors.transporte_rut_chofer && <p className="mt-1 text-sm text-red-600">{errors.transporte_rut_chofer}</p>}
                                             </div>
 

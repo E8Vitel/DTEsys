@@ -40,6 +40,7 @@ class DocumentoDte extends Model
         'fecha_envio_sii',
         'fecha_respuesta_sii',
         'fecha_envio_receptor',
+        'acuse_receptor_token',
         'estado_receptor',
         'fecha_respuesta_receptor',
         'observacion_receptor',

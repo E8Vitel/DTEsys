@@ -17,7 +17,11 @@ export default function Index({ dtes, tipos, estados, filters }) {
     });
 
     const handleChange = (event) => {
-        const { name, value } = event.target;
+        const { name } = event.target;
+        const value = name === 'search'
+            ? event.target.value.replace(/\D/g, '')
+            : event.target.value;
+
         setFormFilters((previous) => ({
             ...previous,
             [name]: value,
@@ -115,7 +119,7 @@ export default function Index({ dtes, tipos, estados, filters }) {
                         >
                             <div>
                                 <label htmlFor="search" className="mb-2 block text-xs font-black uppercase tracking-[0.18em] text-amber-500">
-                                    Busqueda
+                                    Numero de folio
                                 </label>
                                 <input
                                     id="search"
@@ -123,7 +127,8 @@ export default function Index({ dtes, tipos, estados, filters }) {
                                     type="text"
                                     value={formFilters.search}
                                     onChange={handleChange}
-                                    placeholder="Folio, RUT o razon social"
+                                    placeholder="Ej: 15"
+                                    inputMode="numeric"
                                     className="w-full rounded-2xl border border-amber-300 bg-white px-4 py-3 text-amber-800 shadow-sm placeholder:text-amber-300 focus:border-amber-500 focus:ring-amber-300"
                                 />
                             </div>

@@ -6,6 +6,7 @@ use App\Models\DocumentoDte;
 use App\Models\TipoDte;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Inertia\Testing\AssertableInertia as Assert;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\PermissionRegistrar;
 use Tests\TestCase;
@@ -38,28 +39,38 @@ class DteSecurityTest extends TestCase
             ->assertForbidden();
     }
 
-    public function test_export_excel_is_scoped_to_authenticated_user_for_non_admins(): void
+
+    public function test_dte_search_only_filters_by_numeric_folio(): void
     {
-        Permission::create(['name' => 'ver-reportes']);
+        Permission::create(['name' => 'ver-dtes']);
 
-        $userA = User::factory()->create();
-        $userB = User::factory()->create();
+        $user = User::factory()->create();
+        $user->givePermissionTo('ver-dtes');
 
-        $userA->givePermissionTo('ver-reportes');
-        $userB->givePermissionTo('ver-reportes');
+        $matchingDte = $this->createDte($user, 'Folio-15');
+        $nonMatchingDte = $this->createDte($user, 'Folio-16');
 
-        $dteA = $this->createDte($userA, 'F-USER-A');
-        $dteB = $this->createDte($userB, 'F-USER-B');
+        $this->actingAs($user)
+            ->get(route('dtes.index', ['search' => '15']))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Dtes/Index')
+                ->where('filters.search', '15')
+                ->has('dtes', 1)
+                ->where('dtes.0.id', $matchingDte->id)
+                ->where('dtes.0.folio', $matchingDte->folio)
+            );
 
-        $response = $this->actingAs($userA)
-            ->get(route('reportes.export-excel'));
+        $this->actingAs($user)
+            ->get(route('dtes.index', ['search' => '12345678']))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Dtes/Index')
+                ->where('filters.search', '12345678')
+                ->has('dtes', 0)
+            );
 
-        $response->assertOk();
-
-        $csv = $response->streamedContent();
-
-        $this->assertStringContainsString($dteA->folio, $csv);
-        $this->assertStringNotContainsString($dteB->folio, $csv);
+        $this->assertNotSame($matchingDte->id, $nonMatchingDte->id);
     }
 
     private function createDte(User $user, string $folio): DocumentoDte

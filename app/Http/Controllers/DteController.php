@@ -30,7 +30,7 @@ class DteController extends Controller
     {
         // Filtros visibles en la pantalla de listado.
         $filters = [
-            'search' => $request->string('search')->toString(),
+            'search' => preg_replace('/\D/', '', $request->string('search')->toString()) ?? '',
             'tipo' => $request->string('tipo')->toString(),
             'estado' => $request->string('estado')->toString(),
         ];
@@ -43,13 +43,15 @@ class DteController extends Controller
             },
         ])->where('user_id', Auth::id());
 
-        // Busqueda libre por folio, razon social o RUT del receptor.
+        // La busqueda del listado solo admite numero de folio.
         if (!empty($filters['search'])) {
-            $query->where(function ($searchQuery) use ($filters) {
+            $folioBuscado = ltrim($filters['search'], '0');
+            $folioBuscado = $folioBuscado === '' ? '0' : $folioBuscado;
+
+            $query->where(function ($searchQuery) use ($folioBuscado) {
                 $searchQuery
-                    ->where('folio', 'like', '%' . $filters['search'] . '%')
-                    ->orWhere('razon_social_receptor', 'like', '%' . $filters['search'] . '%')
-                    ->orWhere('rut_receptor', 'like', '%' . $filters['search'] . '%');
+                    ->where('id', (int) $folioBuscado)
+                    ->orWhere('folio', 'Folio-' . $folioBuscado);
             });
         }
 
@@ -392,6 +394,7 @@ class DteController extends Controller
         $dte->update([
             'pdf_path' => $pdfPath,
             'fecha_envio_receptor' => now(),
+            'acuse_receptor_token' => $this->generarTokenAcuseReceptor(),
         ]);
 
         $correoReceptor = config('mail.recipient_fallback.address', 'receptor@test.cl');
@@ -399,14 +402,17 @@ class DteController extends Controller
             'aceptado' => URL::temporarySignedRoute('dtes.acuse-receptor.email', now()->addDays(7), [
                 'dte' => $dte->id,
                 'respuesta' => 'aceptado',
+                'token' => $dte->acuse_receptor_token,
             ]),
             'reparo' => URL::temporarySignedRoute('dtes.acuse-receptor.email', now()->addDays(7), [
                 'dte' => $dte->id,
                 'respuesta' => 'reparo',
+                'token' => $dte->acuse_receptor_token,
             ]),
             'rechazado' => URL::temporarySignedRoute('dtes.acuse-receptor.email', now()->addDays(7), [
                 'dte' => $dte->id,
                 'respuesta' => 'rechazado',
+                'token' => $dte->acuse_receptor_token,
             ]),
         ];
 
@@ -437,6 +443,11 @@ class DteController extends Controller
     public function responderAcuseDesdeCorreo(Request $request, DocumentoDte $dte, string $respuesta)
     {
         abort_unless(in_array($respuesta, ['aceptado', 'reparo', 'rechazado'], true), 404);
+        $this->validarTokenAcuseCorreo($dte, $request->query('token'));
+
+        if ($this->yaRespondioAcuseReceptor($dte)) {
+            return $this->renderizarAcuseYaRespondido($dte);
+        }
 
         if ($respuesta === 'aceptado') {
             $this->registrarAcuseEnDocumento($dte, $respuesta, '', $dte->user_id);
@@ -455,6 +466,7 @@ class DteController extends Controller
             'accion' => URL::signedRoute('dtes.acuse-receptor.email.store', [
                 'dte' => $dte->id,
                 'respuesta' => $respuesta,
+                'token' => $dte->acuse_receptor_token,
             ]),
         ]);
     }
@@ -462,6 +474,11 @@ class DteController extends Controller
     public function guardarAcuseDesdeCorreo(Request $request, DocumentoDte $dte, string $respuesta)
     {
         abort_unless(in_array($respuesta, ['reparo', 'rechazado'], true), 404);
+        $this->validarTokenAcuseCorreo($dte, $request->query('token'));
+
+        if ($this->yaRespondioAcuseReceptor($dte)) {
+            return $this->renderizarAcuseYaRespondido($dte);
+        }
 
         $validated = $request->validate([
             'comentario' => 'required|string|max:1000',
@@ -762,6 +779,12 @@ class DteController extends Controller
             ]);
         }
 
+        if ($this->yaRespondioAcuseReceptor($dte)) {
+            throw ValidationException::withMessages([
+                'respuesta' => 'El receptor ya registro una respuesta para este documento.',
+            ]);
+        }
+
         $estadoActual = $this->estadoActual($dte);
         if ($estadoActual === 'Anulada') {
             throw ValidationException::withMessages([
@@ -807,6 +830,47 @@ class DteController extends Controller
             'user_id' => $actorId ?? Auth::id() ?? $dte->user_id,
             'comentario' => $comentario,
         ]);
+    }
+
+    private function generarTokenAcuseReceptor(): string
+    {
+        return Str::random(64);
+    }
+
+    private function validarTokenAcuseCorreo(DocumentoDte $dte, ?string $token): void
+    {
+        abort_if(
+            blank($token)
+            || blank($dte->acuse_receptor_token)
+            || !hash_equals((string) $dte->acuse_receptor_token, (string) $token),
+            403,
+            'Token de acuse invalido.'
+        );
+    }
+
+    private function yaRespondioAcuseReceptor(DocumentoDte $dte): bool
+    {
+        return !empty($dte->fecha_respuesta_receptor)
+            && in_array($dte->estado_receptor, ['Aceptado', 'Rechazado', 'Con reparos'], true);
+    }
+
+    private function renderizarAcuseYaRespondido(DocumentoDte $dte)
+    {
+        return view('acuse.resultado', [
+            'titulo' => 'Respuesta ya registrada',
+            'mensaje' => 'Ya haz hecho ' . $this->descripcionRespuestaReceptor((string) $dte->estado_receptor) . ', cierre esta pestaña.',
+            'estado' => $dte->estado_receptor ?: 'Sin acuse',
+        ]);
+    }
+
+    private function descripcionRespuestaReceptor(string $estadoReceptor): string
+    {
+        return match ($estadoReceptor) {
+            'Aceptado' => 'acuse de recibo',
+            'Rechazado' => 'rechazo del documento',
+            'Con reparos' => 'acuse con reparos',
+            default => 'una respuesta sobre este documento',
+        };
     }
 
 }
